@@ -1,0 +1,18 @@
+{
+  "name": "spider-man-darkest-day",
+  "version": "8.0.0",
+  "private": true,
+  "type": "module",
+  "description": "《蜘蛛侠：至暗之日》v8 · Three.js 双模式（3D 第一人称 + 2D 横版）",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "0.160.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}

@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1b1712">
+  <title>蜘蛛侠：至暗之日</title>
+  <script type="module" src="/src/main.js"></script>
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <main id="stage16x9" aria-label="蜘蛛侠：至暗之日">
+    <canvas id="gl" width="1920" height="1080"></canvas>
+    <canvas id="flat" width="1920" height="1080"></canvas>
+    <video id="cutscene" playsinline webkit-playsinline></video>
+    <div id="comic" class="comic hidden" role="dialog" aria-label="漫画过场">
+      <img id="comicImg" alt="漫画过场">
+      <div class="comic-hint">点击 / F / Enter 继续</div>
+    </div>
+    <div id="firstPersonHands" class="hidden" aria-hidden="true">
+      <img id="handLeft" class="hand hand-left" alt="">
+      <img id="handRight" class="hand hand-right" alt="">
+    </div>
+    <div id="crosshair" aria-hidden="true"><span></span></div>
+    <div id="scanlines" aria-hidden="true"></div>
+    <div id="vignette" aria-hidden="true"></div>
+    <div id="paperGrain" aria-hidden="true"></div>
+
+    <div id="hud">
+      <header id="topBar">
+        <div class="top-left">
+          <div class="dayline">
+            <span class="day">DAY 02</span><span class="slash">/</span><span id="topLocation">武汉·江滩</span>
+          </div>
+          <div class="weather"><span class="weather-icon">☁</span><span id="weatherText">阴，适合追踪</span></div>
+        </div>
+        <div class="top-right">
+          <button class="icon-btn" id="btnHint" title="提示" aria-label="提示">💡</button>
+          <button class="icon-btn" id="btnJournal" title="冒险日志" aria-label="冒险日志">📖</button>
+          <button class="icon-btn" id="btnAudio" title="声音" aria-label="声音">♪</button>
+          <button class="icon-btn" id="btnPause" title="暂停" aria-label="暂停">⏸</button>
+          <button class="icon-btn" id="btnFullscreen" title="全屏" aria-label="全屏">⛶</button>
+        </div>
+      </header>
+
+      <section id="playerCard" class="paper-card">
+        <div class="avatar" aria-hidden="true">🕷</div>
+        <div class="player-meta">
+          <div class="player-name">蜘蛛侠</div>
+          <div id="hearts" class="hearts" aria-label="生命值"></div>
+        </div>
+      </section>
+
+      <section id="resources" aria-label="资源">
+        <div class="chip"><span class="chip-icon">🕸</span><span class="chip-label">蛛网液</span><b id="webFluid">60</b><span class="chip-max">/60</span></div>
+        <div class="chip"><span class="chip-icon">⚙</span><span class="chip-label">零件</span><b id="parts">0</b></div>
+        <div class="chip"><span class="chip-icon">📄</span><span class="chip-label">情报</span><b id="intel">0</b></div>
+      </section>
+
+      <section id="objectiveCard" class="paper-card">
+        <div class="objective-head"><span class="objective-label">今日目标</span><span id="objectiveCheck" class="objective-check">○</span></div>
+        <div class="objective-title" id="objectiveTitle">追踪黑色粘液</div>
+        <div class="objective-sub" id="objectiveSub"></div>
+        <div class="objective-progress"><span id="objectiveProgress"></span></div>
+      </section>
+
+      <div id="enemyBar" class="enemy-bar hidden" aria-live="polite">
+        <div class="enemy-top"><span class="enemy-name" id="enemyName">章鱼博士</span><span class="enemy-hp" id="enemyHpText">3 / 3</span></div>
+        <div class="enemy-track"><div class="enemy-fill" id="enemyFill"></div></div>
+      </div>
+
+      <div id="dialogueBubble" class="dialogue-bubble hidden" role="dialog" aria-live="polite">
+        <div class="dialogue-row">
+          <div class="dialogue-avatar" id="dialogueAvatar">🕷</div>
+          <div class="dialogue-main">
+            <div class="dialogue-speaker" id="dialogueSpeaker">蜘蛛侠</div>
+            <div class="dialogue-text" id="dialogueText"></div>
+          </div>
+        </div>
+        <div class="dialogue-hint">F / 点击继续</div>
+      </div>
+
+      <div id="bossBanner" class="hidden" aria-hidden="true">
+        <div class="boss-kicker">G04 · 追踪</div>
+        <div class="boss-title">黑液迷踪</div>
+        <div class="boss-sub">武汉楼顶 · 江滩方向</div>
+      </div>
+
+      <div id="bottomBar">
+        <div id="locationLabel">01 G01</div>
+      </div>
+
+      <div id="hintBar" class="hint-bar">WASD 移动 · 鼠标 视角 · Space 跳跃 · E/右键 摆荡 · 左键 蛛网弹 · Shift 闪避 · F 交互 · H 提示</div>
+      <div id="interactPrompt" class="hidden" aria-live="polite">
+        <span class="interact-key">F</span>
+        <span id="interactText">按 F 交互</span>
+      </div>
+      <div id="toast" class="toast hidden" role="status"></div>
+      <div id="fps" class="fps hidden">60</div>
+    </div>
+
+    <div id="startOverlay" class="overlay start-overlay">
+      <picture class="start-boot">
+        <source type="image/webp" srcset="./boot.webp">
+        <img src="./boot.jpg" alt="蜘蛛侠：至暗之日 启动画面">
+      </picture>
+      <div class="start-shade" aria-hidden="true"></div>
+      <div class="start-content">
+        <div class="start-bottom">
+          <h1 class="start-title">蜘蛛侠：至暗之日</h1>
+          <button id="startBtn" class="start-btn">开始游戏</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="credits" class="credits hidden" aria-label="制作人名单">
+      <div id="creditsTrack" class="credits-track">
+        <div class="credit-kicker">THE END</div>
+        <div class="credit-title">制作人名单</div>
+        <div class="credit-role">制作人</div><div class="credit-name">小金刚</div>
+        <div class="credit-role">技术总监</div><div class="credit-name">金刚爸爸</div>
+        <div class="credit-role">美术指导</div><div class="credit-name">金刚妈妈</div>
+        <div class="credit-role">AI 工程师们</div>
+        <div class="credit-name">ChatGPT 6 Astra</div><div class="credit-sub">剧情设计与叙事脚本</div>
+        <div class="credit-name">Gemini 4 Argon</div><div class="credit-sub">视频与分镜漫画生成</div>
+        <div class="credit-name">DeepSeek V4 Pro</div><div class="credit-sub">程序逻辑与游戏原型部署</div>
+        <div class="credit-name">豆包 2.1 Pro</div><div class="credit-sub">多模态内容合成</div>
+        <div class="credit-role">首席测试工程师</div><div class="credit-name">小金刚</div>
+        <div class="credit-role">特别鸣谢</div><div class="credit-name">每一位玩家</div>
+        <div class="credit-end">感谢游玩</div>
+      </div>
+    </div>
+
+    <div id="goalOverlay" class="overlay hidden">
+      <div class="start-card">
+        <div class="start-kicker">THE END</div>
+        <h1>完 · 第一季</h1>
+        <p>请为小金刚同学鼓掌，并请期待下一章</p>
+        <button id="restartBtn" class="start-btn">重新体验</button>
+      </div>
+    </div>
+
+    <div id="pauseOverlay" class="overlay hidden">
+      <div class="start-card">
+        <div class="start-kicker">已暂停</div>
+        <h1>喘口气</h1>
+        <p>按 P 或点击继续</p>
+        <button id="resumeBtn" class="start-btn">继续</button>
+      </div>
+    </div>
+
+    <div id="chapterCard" class="overlay hidden">
+      <div class="chapter-card">
+        <div class="chapter-kicker" id="chapterKicker">CHAPTER</div>
+        <div class="chapter-title" id="chapterTitle"></div>
+        <div class="chapter-sub" id="chapterSub"></div>
+      </div>
+    </div>
+
+    <aside id="hintCard" class="hint-card hidden" role="dialog" aria-live="polite">
+      <div class="hint-head">
+        <span class="hint-head-title">💡 提示</span>
+        <button id="hintClose" class="hint-close" aria-label="关闭提示">×</button>
+      </div>
+      <div class="hint-title" id="hintTitle"></div>
+      <div class="hint-text" id="hintText"></div>
+      <div class="hint-actions">
+        <button id="hintRetry" class="hint-btn ghost">重试本段</button>
+        <button id="hintOk" class="hint-btn">知道了</button>
+      </div>
+    </aside>
+
+    <div id="touchControls" aria-hidden="true">
+      <div class="touch-left">
+        <button data-touch="left" class="touch-btn">◀</button>
+        <button data-touch="right" class="touch-btn">▶</button>
+      </div>
+      <div class="touch-right">
+        <button data-touch="jump" class="touch-btn touch-small">跳</button>
+        <button data-touch="swing" class="touch-btn">丝</button>
+        <button data-touch="dodge" class="touch-btn touch-small">闪</button>
+      </div>
+    </div>
+  </main>
+
+</body>
+</html>

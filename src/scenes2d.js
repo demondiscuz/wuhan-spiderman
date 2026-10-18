@@ -1,0 +1,650 @@
+/* 第二章（G04–G09）2D 横版：正交逻辑 + 2D Canvas 渲染。
+ * 与 3D 章共享 hooks（audio/视频/对白/状态/推进）。
+ */
+const W = 1920, H = 1080;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const approach = (v, t, s) => v < t ? Math.min(v + s, t) : Math.max(v - s, t);
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
+
+function roundRectPath(c, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
+}
+
+function genRoofs(width, { startY = 810, segW = 640, gap = 160 } = {}) {
+  const a = []; let x = 0;
+  while (x < width - 200) { const y = startY - Math.round(hash(x) * 60); a.push({ x, y, w: segW, h: H - y }); x += segW + gap; }
+  return a;
+}
+function genAnchors(width, n, y) { const a = []; for (let i = 0; i < n; i++) a.push({ x: Math.round(300 + i * (width - 600) / Math.max(1, n - 1)), y }); return a; }
+function genGoo(width, plats, n) { const a = []; for (let i = 0; i < n; i++) { const p = plats[Math.floor(hash(i + 7) * plats.length)]; a.push({ x: p.x + 60 + hash(i + 13) * (p.w - 120), y: p.y, r: 40 + hash(i + 21) * 26 }); } return a; }
+
+function buildScene(id) {
+  const ch2 = {
+    G01: () => {
+      const platforms = genRoofs(4200, { startY: 820, segW: 620, gap: 170 });
+      return {
+        id, chapter: 'ch1', theme: 'pixel', pixel: true, bgm: 'bgm_fly', ambience: ['sfx_wind'],
+        width: 4200, platforms, oneways: [], anchors: genAnchors(4200, 9, 360),
+        goo: [], nodes: [], collectibles: [],
+        enemies: [
+          { x: 520, y: 770, w: 54, h: 50, hp: 1, alive: true, dir: -1, t: 0, harmless: false, minX: 20, maxX: 600 },
+          { x: 1900, y: 770, w: 54, h: 50, hp: 1, alive: true, dir: -1, t: 0, harmless: false, minX: 1600, maxX: 2180 }
+        ],
+        targets: [], goal: { x: 4000 },
+        start: { x: 200, y: 670 }, carry: false,
+        objective: '飞向武汉最高楼·绿地中心', sub: '像素风 · 按住 E/右键摆荡',
+        dialogue: [], video: null
+      };
+    },
+    G02: () => ({
+      id, chapter: 'ch1', theme: 'pixel', pixel: true, bgm: 'bgm_battle', ambience: [],
+      width: 1900, platforms: [{ x: 0, y: 820, w: 1900, h: 260 }], oneways: [], anchors: [{ x: 950, y: 300 }],
+      goo: [], nodes: [], collectibles: [], enemies: [], targets: [], goal: null,
+      start: { x: 240, y: 670 }, carry: false,
+      objective: '反击章鱼博士（0/3）', sub: '闪避工具箱，或左键蛛网弹把它甩回去',
+      dialogue: [
+        { speaker: '蜘蛛侠', text: '嘿！奥托博士！这可是武汉最高楼，绿地中心，你用四根机械爪拆护栏可不太礼貌！', voice: 'vo_d01', lock: true, comic: 'comics/docock.jpg' },
+        { speaker: '章鱼博士', text: '走开，蜘蛛侠！我来光谷参加量子科学展，但刚才机械臂的主控芯片被一滴奇怪的黑水侵蚀了，我控制不住它们——小心！', voice: 'vo_d02', lock: true, comic: 'comics/docock2.jpg' }
+      ],
+      video: null, boss: { hp: 0, max: 3, phase: 1, timer: 0, throwTimer: 1.8, bound: 0, maxBound: 4 }
+    }),
+    G03: () => ({
+      id, chapter: 'ch1', theme: 'pixel', pixel: true, bgm: 'bgm_normal', ambience: [],
+      width: 1900, platforms: [{ x: 0, y: 820, w: 1900, h: 260 }], oneways: [], anchors: [], goo: [], nodes: [], collectibles: [],
+      enemies: [], targets: [{ x: 950, y: 640, r: 60, hit: false, label: 'F 击掌' }], goal: null,
+      start: { x: 300, y: 670 }, carry: false, docX: 950, walkOut: false, walkT: 0,
+      objective: '与奥托博士握手言和', sub: '听完对白，靠近博士按 F',
+      dialogue: [{ speaker: '章鱼博士', text: '太感谢你了，孩子！要不是你的蛛丝够结实，我差点在武汉闯下大祸。不打不相识，从今天起，你就是我奥托最好的朋友！', voice: 'vo_d03', lock: true, comic: 'comics/chip_pull.jpg' }],
+      video: null
+    }),
+    G04: () => {
+      const platforms = [
+        { x: 0, y: 820, w: 900, h: 260 }, { x: 1050, y: 780, w: 700, h: 300 }, { x: 1900, y: 720, w: 800, h: 360 },
+        { x: 2850, y: 780, w: 800, h: 300 }, { x: 3800, y: 700, w: 800, h: 380 }, { x: 4750, y: 760, w: 800, h: 320 },
+        { x: 5700, y: 700, w: 800, h: 380 }, { x: 6650, y: 800, w: 550, h: 280 }
+      ];
+      return {
+        id, chapter: 'ch2', theme: 'dawn', bgm: 'bgm_normal', ambience: ['sfx_wind', 'sfx_goo'], width: 7200, platforms,
+        oneways: [{ x: 1200, y: 650, w: 220, h: 18 }, { x: 2150, y: 600, w: 260, h: 18 }, { x: 4050, y: 580, w: 260, h: 18 }, { x: 6000, y: 590, w: 260, h: 18 }],
+        anchors: [{ x: 1150, y: 380 }, { x: 2250, y: 350 }, { x: 3250, y: 330 }, { x: 4350, y: 370 }, { x: 5300, y: 340 }, { x: 6300, y: 350 }, { x: 6850, y: 300 }],
+        goo: genGoo(7200, platforms, 9), nodes: [{ x: 1400, y: 680, l: '01', reached: false }, { x: 2500, y: 620, l: '02', reached: false }, { x: 4200, y: 600, l: '03', reached: false }, { x: 6100, y: 600, l: '04', reached: false }, { x: 6900, y: 700, l: '05', reached: false }],
+        collectibles: [{ x: 1650, y: 680, taken: false }, { x: 3350, y: 660, taken: false }, { x: 5150, y: 680, taken: false }],
+        goal: { x: 6900 }, start: { x: 180, y: 670 }, carry: false,
+        objective: '追踪黑色粘液（0/5）', sub: '沿着黑液痕迹，前往龟山电视塔',
+        dialogue: [{ speaker: '蜘蛛侠', text: '咦？这就是刚才让博士机械臂失控的东西？它在往那边爬！', voice: 'vo_d05', lock: false }]
+      };
+    },
+    G05: () => ({
+      id, chapter: 'ch2', theme: 'night', bgm: 'bgm_normal', ambience: ['sfx_portal'], width: 1800,
+      platforms: [{ x: 0, y: 820, w: 1800, h: 260 }], oneways: [], anchors: [], goo: [{ x: 700, y: 820, r: 60 }],
+      nodes: [], collectibles: [], targets: [{ x: 1500, y: 640, r: 70, hit: false, label: '传送门' }], goal: null, start: { x: 300, y: 670 }, carry: false,
+      objective: '穿过魔法传送门', sub: '走近右侧金橙色火花圈并按 F', dialogue: [], video: 'v1'
+    }),
+    G06: () => {
+      const platforms = genRoofs(5200);
+      return {
+        id, chapter: 'ch2', theme: 'night', bgm: 'bgm_normal', ambience: ['sfx_ambient_ny'], width: 5200, platforms, oneways: [], anchors: genAnchors(5200, 7, 360),
+        goo: genGoo(5200, platforms, 7), nodes: (() => { const a = []; for (let i = 0; i < 4; i++) { const p = platforms[Math.floor((i + 1) * (platforms.length - 1) / 4)]; a.push({ x: Math.round(p.x + p.w / 2), y: p.y - 100, l: String(i + 1).padStart(2, '0'), reached: false }); } return a; })(),
+        collectibles: [], goal: { x: 5000 }, start: { x: 200, y: 660 }, carry: false,
+        objective: '追踪黑液至废弃工厂（0/4）', sub: '穿过纽约雨夜街巷', dialogue: [], video: null
+      };
+    },
+    G07: () => ({
+      id, chapter: 'ch2', theme: 'night', bgm: 'bgm_battle', ambience: ['sfx_goo'], width: 2000,
+      platforms: [{ x: 0, y: 820, w: 2000, h: 260 }], oneways: [], anchors: [{ x: 1000, y: 300 }], goo: [], nodes: [], collectibles: [],
+      enemies: [{ x: 1300, y: 700, w: 90, h: 120, hp: 3, dir: -1, t: 0, alive: true }, { x: 1500, y: 700, w: 90, h: 120, hp: 3, dir: -1, t: 1, alive: true }, { x: 1700, y: 700, w: 90, h: 120, hp: 3, dir: -1, t: 2, alive: true }],
+      targets: [], goal: null, start: { x: 240, y: 670 }, carry: false, objective: '击败毒液小兵（0/3）', sub: '每只用 3 发蛛网弹击溃', dialogue: [], video: 'v2'
+    }),
+    G08: () => ({
+      id, chapter: 'ch2', theme: 'night', bgm: 'bgm_battle', ambience: [], width: 2000,
+      platforms: [{ x: 0, y: 820, w: 2000, h: 260 }], oneways: [], anchors: [{ x: 1000, y: 260 }], goo: [], nodes: [], collectibles: [], enemies: [], targets: [],
+      goal: null, start: { x: 240, y: 670 }, carry: false, objective: '困住毒液本体（0/12）', sub: '闪避猛扑，硬直时左键连射',
+      dialogue: [{ speaker: '钢铁侠', text: '这家伙块头太大，直接放脉冲波会被他躲开！彼得，困住他！', voice: 'vo_d08', lock: false }, { speaker: '蜘蛛侠', text: '看我的！', voice: 'vo_d09', lock: false }],
+      video: 'v3', boss: { state: 'idle', timer: 1.5, webs: 0 }
+    }),
+    G09: () => {
+      const platforms = genRoofs(3600, { segW: 800 });
+      return {
+        id, chapter: 'ch2', theme: 'dusk', bgm: 'bgm_normal', ambience: ['sfx_ambient_ny'], width: 3600, platforms, oneways: [], anchors: [], goo: [],
+        nodes: [], collectibles: [], goal: { x: 3450 }, start: { x: 200, y: 670 }, carry: true,
+        objective: '背埃迪回家', sub: '按住 D 缓慢前行', dialogue: [{ speaker: '蜘蛛侠', text: '埃迪？！怎么会是你！', voice: 'vo_d10', lock: true }], video: null
+      };
+    }
+  };
+  const s = ch2[id]();
+  s.targets = s.targets || [];
+  s.enemies = s.enemies || [];
+  return s;
+}
+
+export function create2D(hooks) {
+  const canvas = document.getElementById('flat');
+  const ctx = canvas.getContext('2d');
+  const DPR = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = W * DPR; canvas.height = H * DPR;
+
+  const S = hooks.state;
+  let scene = null, camX = 0, camTarget = 0;
+  const pixelBg = new Image();
+  let pixelBgReady = false;
+  pixelBg.onload = () => { pixelBgReady = true; };
+  pixelBg.src = `${import.meta.env.BASE_URL}comics/ch1_pixel_bg.jpg`;
+  const player = { x: 200, y: 670, w: 58, h: 150, vx: 0, vy: 0, grounded: false, coyote: 0, jumpBuffer: 0, facing: 1, anim: 0, swing: null, swingCd: 0, dodge: 0, dodgeCd: 0, invuln: 0, carry: false };
+  let enemies = [], targets = [], shots = [], projectiles = [], particles = [], shake = 0;
+
+  function toast(t, ms, warn) { hooks.toast(t, ms, warn); }
+
+  function enter(id) {
+    scene = buildScene(id);
+    S.chapter = scene.chapter;
+    S.lockInput = 0; S.paused = false; S._hintPaused = false; S.dialogueActive = false;
+    enemies = scene.enemies.map(e => ({ ...e }));
+    targets = (scene.targets || []).map(t => ({ ...t }));
+    shots = []; projectiles = []; particles = [];
+    camX = camTarget = 0;
+    player.x = scene.start.x; player.y = scene.start.y; player.vx = 0; player.vy = 0; player.swing = null; player.carry = !!scene.carry;
+    // 开场安全落地：若出生点下方有平台，直接落在平台上，避免“开局持续下坠”
+    const under = scene.platforms.find(p => player.x + player.w / 2 > p.x && player.x + player.w / 2 < p.x + p.w);
+    if (under) { player.y = under.y - player.h; player.grounded = true; }
+    S.respawn = { x: scene.start.x, y: scene.start.y };
+    S.web = 60; S.objectiveProgress = ''; S.dialogueEndCallback = null;
+    hooks.hideEnemyBar();
+    hooks.setObjective(scene.objective, scene.sub, '');
+    if (scene.id === 'G02') {
+      // 先自由行动；碰到章鱼博士后触发两段对白 + 两张独立漫画；对话结束才开战
+      scene.combatStarted = false; scene.introStarted = false;
+      hooks.audio.stopBgm();
+      hooks.setObjective('接近章鱼博士', '走到博士身边触发对话', '');
+      S.lockInput = 0;
+    } else if (scene.bgm) hooks.audio.bgm(scene.bgm);
+    else hooks.audio.stopBgm();
+    hooks.audio.ambience(scene.ambience || []);
+    if (scene.dialogue && scene.dialogue.length && scene.id !== 'G02') hooks.sayQueue(scene.dialogue.slice());
+    if (scene.boss) { scene.boss.state = 'idle'; scene.boss.timer = 1.5; scene.boss.webs = 0; scene.boss.lastSec = -1; }
+  }
+
+  function nearestAnchor() {
+    const cx = player.x + player.w / 2, cy = player.y + player.h / 2;
+    let best = null, bestD = 1e9;
+    for (const a of scene.anchors) { if (a.y > player.y + 40) continue; const d = dist(a.x, a.y, cx, cy); if (d < 520 && d < bestD) { best = a; bestD = d; } }
+    return best;
+  }
+  function trySwing() {
+    if (player.swing || player.swingCd > 0) return;
+    const a = nearestAnchor(); if (!a) { toast('附近没有可吸附的锚点', 1400, true); return; }
+    const cx = player.x + player.w / 2, cy = player.y + player.h / 2;
+    player.swing = { a, len: clamp(dist(a.x, a.y, cx, cy), 160, 520) };
+    player.grounded = false; player.vy = Math.min(player.vy, -120);
+    hooks.audio.sfx('sfx_swing', 0.8);
+  }
+  function releaseSwing() { if (!player.swing) return; player.vx += player.facing * 40; player.vy -= 160; player.swing = null; player.swingCd = 0.22; }
+  function shootWeb() {
+    if (S.web <= 0) { toast('蛛网液不足', 1200, true); return; }
+    S.web--;
+    shots.push({ x: player.x + player.w / 2, y: player.y + 46, vx: player.facing * 1400, vy: 0, life: 0.9 });
+    hooks.audio.sfx('sfx_swing', 0.6);
+  }
+  function hurt(n) {
+    if (player.invuln > 0) return;
+    S.hearts -= n; player.invuln = 1;
+    if (S.hearts <= 0) { S.hearts = S.maxHearts; toast('重新出发，心回满'); } else toast('受伤了！', 1300, true);
+    respawn();
+  }
+  function respawn() {
+    const r = S.respawn && Number.isFinite(S.respawn.x) ? S.respawn : scene.start;
+    player.x = r.x; player.y = r.y; player.vx = 0; player.vy = 0; player.swing = null; player.grounded = false;
+    const under = scene.platforms.find(p => player.x + player.w / 2 > p.x && player.x + player.w / 2 < p.x + p.w);
+    if (under) { player.y = under.y - player.h; player.grounded = true; }
+    player.invuln = Math.max(player.invuln, 0.8);
+    camX = camTarget = clamp(player.x - W * 0.4, 0, scene.width - W);
+  }
+
+  function rectOverlap(a, b) { return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
+
+  function updatePlayer(dt) {
+    if (S.lockInput > 0) { S.lockInput -= dt; return; }
+    const I = hooks.input;
+    const move = (I.right ? 1 : 0) - (I.left ? 1 : 0);
+    const ACC = 2600, MAX = player.carry ? 260 : 520;
+    if (move !== 0) { player.vx += move * ACC * dt * (player.grounded ? 1 : 0.7); player.facing = move; }
+    else if (player.grounded && !player.swing) player.vx = approach(player.vx, 0, 2600 * dt);
+    player.vx = clamp(player.vx, -MAX, MAX);
+    if (I.dodge && player.dodgeCd <= 0 && !player.swing) { player.dodge = 0.22; player.dodgeCd = 1; player.invuln = 0.35; player.vx = player.facing * 780; player.vy = Math.min(player.vy, -60); }
+    if (I.jumpBuffer > 0 && (player.grounded || player.coyote > 0)) { player.vy = -920; player.grounded = false; player.coyote = 0; I.jumpBuffer = 0; }
+    player.vy += 2400 * dt; player.vy = Math.min(player.vy, 1800);
+    if (player.swing) { player.vx += move * ACC * 0.3 * dt; if (!I.swingHeld) releaseSwing(); }
+    player.x = clamp(player.x + player.vx * dt, 0, scene.width - player.w);
+    for (const p of scene.platforms) if (rectOverlap(player, p)) { if (player.vx > 0) player.x = p.x - player.w; else if (player.vx < 0) player.x = p.x + p.w; player.vx = 0; }
+    const prevBottom = player.y + player.h;
+    player.y += player.vy * dt;
+    let landed = false, landY = -1e9;
+    for (const p of scene.platforms.concat(scene.oneways)) {
+      if (p.oneway && player.vy < 0) continue;
+      if (player.x + player.w > p.x + 2 && player.x < p.x + p.w - 2 && player.vy >= 0 && prevBottom <= p.y + 4 && player.y + player.h >= p.y) if (p.y > landY) { landY = p.y; landed = true; }
+    }
+    if (landed) { player.y = landY - player.h; player.vy = 0; player.grounded = true; player.coyote = 0.1; }
+    else { player.grounded = false; player.coyote = Math.max(0, player.coyote - dt); }
+    if (player.swing) {
+      const a = player.swing.a, cx = player.x + player.w / 2, cy = player.y + player.h / 2;
+      const dx = cx - a.x, dy = cy - a.y, dd = Math.hypot(dx, dy) || 1;
+      if (dd > player.swing.len) { const nx = dx / dd, ny = dy / dd; player.x = a.x + nx * player.swing.len - player.w / 2; player.y = a.y + ny * player.swing.len - player.h / 2; const r = player.vx * nx + player.vy * ny; if (r > 0) { player.vx -= r * nx; player.vy -= r * ny; } }
+      if (player.grounded) releaseSwing();
+    }
+    player.dodge = Math.max(0, player.dodge - dt); player.dodgeCd = Math.max(0, player.dodgeCd - dt); player.swingCd = Math.max(0, player.swingCd - dt); player.invuln = Math.max(0, player.invuln - dt);
+    I.jumpBuffer = Math.max(0, I.jumpBuffer - dt);
+    player.anim += dt * (Math.abs(player.vx) > 20 ? 1 : 0);
+    if (I.shoot) { I.shoot = false; shootWeb(); }
+    I.dodge = false;
+    if (player.y > 980) {
+      const under = scene.platforms.find(p => player.x + player.w / 2 > p.x && player.x + player.w / 2 < p.x + p.w);
+      if (under) { player.y = under.y - player.h; player.vy = 0; player.grounded = true; toast('蛛丝把你拉了回来'); }
+      else respawn();
+    }
+  }
+
+  function setupClaws2D() {
+    const b = scene.boss;
+    targets = [
+      { x: 1240, y: 560, r: 46, hit: false, claw: true, label: '爪 1' },
+      { x: 1490, y: 500, r: 46, hit: false, claw: true, label: '爪 2' },
+      { x: 1240, y: 400, r: 46, hit: false, claw: true, label: '爪 3' },
+      { x: 1490, y: 340, r: 46, hit: false, claw: true, label: '爪 4' }
+    ];
+    b.bound = 0; b.timer = 30; b.lastSec = -1;
+    hooks.setObjective('绑住 4 根机械爪（0/4）', '30 秒内朝发光爪点各射 1 发蛛网', '');
+    hooks.setEnemyBar('机械爪', 4, 4);
+  }
+  function checkBind2D() {
+    const b = scene.boss;
+    if (b.bound >= 4) {
+      b.phase = 3;
+      hooks.hideEnemyBar();
+      hooks.setObjective('拔除故障芯片', '靠近章鱼博士按 F', '');
+      toast('4 根机械爪已绑死！靠近博士按 F');
+    } else {
+      hooks.setObjective('绑住 4 根机械爪（' + b.bound + '/4）', '30 秒内朝发光爪点各射 1 发蛛网', '');
+    }
+  }
+  function hitDoc2D() {
+    const b = scene.boss;
+    if (!b || b.phase !== 1) return;
+    b.hp = Math.min(3, b.hp + 1);
+    hooks.setEnemyBar('章鱼博士', 3 - b.hp, 3);
+    hooks.audio.sfx('sfx_mech');
+    if (b.hp >= 3) { b.phase = 2; setupClaws2D(); toast('章鱼博士僵直！30 秒内射 4 个爪点'); }
+  }
+  function updateBoss2D(dt) {
+    const b = scene.boss;
+    if (!b) return;
+    if (b.phase === 1) {
+      b.throwTimer -= dt;
+      if (b.throwTimer <= 0) {
+        b.throwTimer = 2.4;
+        projectiles.push({ x: 1580, y: 730, vx: -420, vy: 0, life: 8, reflected: false });
+        hooks.audio.sfx('sfx_mech', 0.6);
+      }
+    } else if (b.phase === 2) {
+      b.timer -= dt;
+      const sec = Math.max(0, Math.ceil(b.timer));
+      if (sec !== b.lastSec) {
+        b.lastSec = sec;
+        hooks.setObjective('绑住 4 根机械爪（' + b.bound + '/4）', '剩余 ' + sec + ' 秒', '');
+      }
+      if (b.timer <= 0) setupClaws2D();
+    }
+    // 工具箱投射物
+    projectiles = projectiles.filter(p => (p.life -= dt) > 0);
+    for (const p of projectiles) {
+      p.x += p.vx * dt; p.y += (p.vy || 0) * dt;
+      if (p.reflected) {
+        if (p.x > 1520) { p.life = 0; hitDoc2D(); }
+      } else if (player.invuln <= 0 && dist(p.x, p.y, player.x + player.w / 2, player.y + player.h / 2) < 60) {
+        p.life = 0; hurt(1);
+      }
+    }
+  }
+  function onHandshake2D() {
+    hooks.audio.sfx('sfx_mech');
+    hooks.sayQueue([{ speaker: '蜘蛛侠', text: '一言为定，拐子！我现在就带你去楼下吃完热干面！', voice: 'vo_d04', lock: true, comic: 'comics/handshake.jpg' }]);
+    // D04 语音结束后，两人一起向右走出画面
+    S.dialogueEndCallback = () => {
+      scene.walkOut = true; scene.walkT = 0; S.lockInput = 9999;
+      hooks.audio.sfx('sfx_jet');
+    };
+  }
+
+  function checkG07() {
+    const alive = enemies.filter(e => e.alive).length;
+    hooks.setObjective('击败毒液小兵（' + (3 - alive) + '/3）', scene.sub, (3 - alive) + ' / 3');
+    if (alive === 0) {
+      toast('毒液小兵被清空，钢铁侠破门救场！');
+      hooks.playVideo('v2', () => {
+        hooks.audio.sfx('sfx_impact'); hooks.audio.sfx('sfx_jet');
+        hooks.sayQueue([{ speaker: '钢铁侠', text: '退后，小蜘蛛！神盾局一检测到跨国传送门和共生体反应就通知我了，剩下的交给我！', voice: 'vo_d07', lock: true }]);
+        setTimeout(() => hooks.goTo('G08'), 8500);
+      });
+    }
+  }
+  function hitVenom() {
+    scene.boss.webs++;
+    hooks.setObjective('困住毒液本体（' + scene.boss.webs + '/12）', scene.sub, scene.boss.webs + ' / 12');
+    if (scene.boss.webs >= 12) { toast('毒液已被死死困住！按 F 呼叫钢铁侠！'); scene.boss.state = 'bound'; }
+  }
+  function callIronMan() { hooks.playVideo('v3', () => { hooks.audio.sfx('sfx_impact'); hooks.audio.sfx('sfx_misc'); hooks.goTo('G09'); }); }
+
+  function startDocIntro() {
+    if (!scene || scene.id !== 'G02' || scene.introStarted) return;
+    scene.introStarted = true;
+    S.lockInput = 9999;
+    hooks.audio.stopBgm();
+    hooks.hideEnemyBar();
+    hooks.setObjective('与章鱼博士对峙', '听完两段对白，漫画与语音同步', '');
+    S.dialogueEndCallback = () => {
+      scene.combatStarted = true;
+      S.lockInput = 0;
+      hooks.setEnemyBar('章鱼博士', 3, 3);
+      hooks.audio.bgm('bgm_battle');
+      hooks.setObjective('反击章鱼博士（0/3）', '闪避工具箱，或左键蛛网弹把它甩回去', '');
+    };
+    hooks.sayQueue(scene.dialogue.slice());
+  }
+
+  function update(dt) {
+    scene.t = (scene.t || 0) + dt;
+    if (scene.walkOut) {
+      scene.walkT += dt;
+      player.x += 320 * dt; player.facing = 1; player.anim += dt * 10;
+      scene.docX = (scene.docX || 950) + 280 * dt;
+      if (scene.walkT > 6) { hooks.goTo('G04'); return; }
+    }
+    updatePlayer(dt);
+    if (scene.id === 'G02') {
+      if (!scene.combatStarted) {
+        if (!scene.introStarted && Math.abs(player.x + player.w / 2 - 1600) < 220) startDocIntro();
+      } else {
+        updateBoss2D(dt);
+      }
+    }
+    // 小兵
+    for (const e of enemies) {
+      if (!e.alive) continue;
+      e.t += dt; e.x += e.dir * (140 + Math.sin(e.t * 2) * 40) * dt;
+      if (e.x < (e.minX ?? 60) || e.x > (e.maxX ?? scene.width - 120)) e.dir *= -1;
+      if (!e.harmless && player.invuln <= 0 && dist(player.x + player.w / 2, player.y + player.h / 2, e.x + e.w / 2, e.y + e.h / 2) < 70) hurt(1);
+    }
+    // 蛛网弹
+    shots = shots.filter(s => (s.life -= dt) > 0);
+    for (const s of shots) {
+      s.x += s.vx * dt;
+      if (s.x < 0 || s.x > scene.width) s.life = 0;
+      for (const p of projectiles) if (!p.reflected && p.life > 0 && dist(s.x, s.y, p.x, p.y) < 40) { p.reflected = true; p.vx = 900; p.vy = -80; s.life = 0; }
+      for (const t of targets) if (!t.hit && t.claw && dist(s.x, s.y, t.x, t.y) < (t.r || 40)) { t.hit = true; scene.boss.bound++; checkBind2D(); s.life = 0; break; }
+      for (const e of enemies) if (e.alive && s.x > e.x && s.x < e.x + e.w && s.y > e.y && s.y < e.y + e.h) { s.life = 0; e.hp--; if (e.hp <= 0) { e.alive = false; if (scene.id === 'G01') toast('小怪被击飞！', 900); if (scene.id === 'G07') checkG07(); } break; }
+      for (const t of targets) if (!t.hit && dist(s.x, s.y, t.x, t.y) < (t.r || 40)) { s.life = 0; if (scene.id === 'G05') { t.hit = true; hooks.playVideo('v1', () => { hooks.sayQueue([{ speaker: '蜘蛛侠', text: '哇哦！这金橙色的火花圈……不管了，黑色液体钻进去了，我得跟过去看看！', voice: 'vo_d06', lock: true }]); setTimeout(() => hooks.goTo('G06'), 9000); }); } break; }
+      if (scene.id === 'G08' && s.x > scene.width - 560 && s.y > 440 && s.y < 800) { s.life = 0; hitVenom(); }
+    }
+    // G08 毒液状态机
+    if (scene.id === 'G08' && scene.boss.state !== 'bound') {
+      const b = scene.boss;
+      if (b.state === 'idle' || b.state === 'stagger') { b.timer -= dt; if (b.timer <= 0) { b.state = b.state === 'idle' ? 'lunge' : 'idle'; b.timer = b.state === 'lunge' ? 0.8 : 1.4; if (b.state === 'stagger') b.state = 'idle'; } }
+      else if (b.state === 'lunge') { b.timer -= dt; if (b.timer <= 0) { b.state = 'stagger'; b.timer = 1.6; toast('毒液陷入硬直，连按左键射网！'); } }
+    }
+    // 目标点
+    const cx = player.x + player.w / 2, cy = player.y + player.h / 2;
+    if (scene.goal && cx >= scene.goal.x - 60) {
+      if (scene.id === 'G01') { hooks.audio.sfx('sfx_spider_sense'); hooks.goTo('G02'); }
+      else if (scene.id === 'G04') hooks.goTo('G05');
+      else if (scene.id === 'G06') hooks.goTo('G07');
+      else if (scene.id === 'G09') hooks.goTo('G10');
+    }
+    // 节点
+    if (scene.nodes && scene.nodes.length) { let reached = 0; for (const n of scene.nodes) if (n.reached) reached++; for (const n of scene.nodes) if (!n.reached && dist(cx, cy, n.x, n.y) < 110) { n.reached = true; reached++; hooks.audio.sfx('sfx_spider_sense', 0.5); } if (reached !== S._lastNodes) { S._lastNodes = reached; hooks.setObjective((scene.id === 'G04' ? '追踪黑色粘液（' + reached + '/5）' : '追踪黑液至废弃工厂（' + reached + '/4）'), scene.sub, reached + ' / ' + (scene.nodes.length)); } }
+    // 收集
+    for (const c of scene.collectibles) if (!c.taken && dist(cx, cy, c.x, c.y) < 64) { c.taken = true; S.parts++; hooks.audio.sfx('sfx_misc', 0.6); }
+    // 相机
+    camTarget = clamp(player.x + player.w / 2 - W * 0.42, 0, Math.max(0, scene.width - W));
+    camX += (camTarget - camX) * Math.min(1, dt * 6);
+    // 粒子
+    particles = particles.filter(p => (p.life -= dt) > 0);
+    for (const p of particles) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 260 * dt; }
+    // F 交互提示（抖动）
+    const cx0 = player.x + player.w / 2;
+    if (S.dialogueActive || S.comicActive) hooks.hidePrompt();
+    else if (scene.id === 'G02' && scene.combatStarted && scene.boss.phase === 3 && Math.abs(cx0 - 1600) < 180) hooks.setPrompt('拔除故障芯片');
+    else if (scene.id === 'G03' && !scene.walkOut && targets[0] && !targets[0].hit && Math.abs(cx0 - targets[0].x) < 170) hooks.setPrompt('与章鱼博士握手');
+    else hooks.hidePrompt();
+  }
+
+  function onInteract() {
+    if (S.dialogueActive) { hooks.skipDialogue(); return; }
+    const cx = player.x + player.w / 2, cy = player.y + player.h / 2;
+    for (const t of targets) if (!t.hit && dist(cx, cy, t.x, t.y) < t.r + 80) {
+      t.hit = true;
+      if (scene.id === 'G03') { onHandshake2D(); return; }
+      if (scene.id === 'G05') { hooks.playVideo('v1', () => { hooks.sayQueue([{ speaker: '蜘蛛侠', text: '哇哦！这金橙色的火花圈……不管了，黑色液体钻进去了，我得跟过去看看！', voice: 'vo_d06', lock: true }]); setTimeout(() => hooks.goTo('G06'), 9000); }); return; }
+      return;
+    }
+    if (scene.id === 'G02' && scene.boss.phase === 3 && Math.abs(cx - 1600) < 160) { hooks.goTo('G03'); return; }
+    if (scene.id === 'G08' && scene.boss.state === 'bound') callIronMan();
+  }
+
+  function px(x, y, w, h, color) { ctx.fillStyle = color; ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); }
+  function drawPixelPlayer() {
+    const x = Math.round(player.x + player.w / 2 - 20), y = Math.round(player.y + player.h);
+    const red = '#c0392b', blue = '#2e4c8a', dark = '#141018', eye = '#f4f1e8';
+    const run = player.grounded && Math.abs(player.vx) > 20 ? Math.sin(player.anim * 14) : 0;
+    px(x - 12, y - 42, 10, 42, blue); px(x + 2, y - 42, 10, 42, blue);
+    px(x - 16, y - 6, 16, 6, dark); px(x + 0, y - 6 + (run > 0 ? -0 : 0), 16, 6, dark);
+    px(x - 14, y - 96, 28, 56, red);
+    px(x - 14, y - 58, 28, 16, blue);
+    px(x - 22, y - 92, 8, 34, red); px(x + 14, y - 92, 8, 34, red);
+    px(x - 10, y - 122, 20, 22, red);
+    px(x - 7, y - 116, 6, 8, eye); px(x + 1, y - 116, 6, 8, eye);
+    px(x - 14, y - 84, 28, 2, dark); px(x - 14, y - 74, 28, 2, dark);
+    if (player.swing) { px(x + 18, y - 100, 6, 6, red); }
+  }
+  function drawPixelDocOck(ox, oy, t = 0) {
+    // 背后 6 根持续摆动的机械臂 + 章鱼博士本体
+    ctx.save();
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (let i = 0; i < 6; i++) {
+      const side = i < 3 ? -1 : 1;
+      const phase = t * 2.4 + i * 0.9;
+      let x = ox + side * 18, y = oy - 108;
+      const len = 42 + Math.sin(phase * 1.3) * 6;
+      ctx.strokeStyle = '#6b1f16'; ctx.lineWidth = 13;
+      ctx.beginPath(); ctx.moveTo(x, y);
+      for (let seg = 0; seg < 3; seg++) {
+        const ang = side * (0.55 + seg * 0.42) + Math.sin(phase + seg * 0.9) * 0.34;
+        x += Math.cos(ang) * len;
+        y -= 18 + Math.sin(phase + seg * 1.2) * 5;
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 7;
+      ctx.stroke();
+      // 爪子
+      for (let c = -1; c <= 1; c++) {
+        ctx.strokeStyle = '#d94a35'; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(x, y);
+        ctx.lineTo(x + c * 12 + side * 10, y - 14 + Math.abs(c) * 5);
+        ctx.stroke();
+      }
+      // 吸盘
+      for (let d = 0; d < 2; d++) px(x - 2 + d * 5, y + 8 + d * 6, 4, 4, '#2b0d0a');
+    }
+    // 身体 / 头 / 红芯片
+    px(ox - 30, oy - 112, 60, 84, '#2c3d2c');
+    px(ox - 24, oy - 102, 48, 42, '#3d5a3a');
+    px(ox - 22, oy - 146, 44, 36, '#c9a27a');
+    px(ox - 14, oy - 136, 10, 10, '#111'); px(ox + 4, oy - 136, 10, 10, '#111');
+    px(ox - 6, oy - 120, 12, 6, '#8a2f22');
+    px(ox - 8, oy - 106, 16, 8, '#ff3b2f');
+    px(ox - 30, oy - 28, 60, 8, '#1a241a');
+    ctx.restore();
+  }
+  function drawPixelMonster(e) {
+    const x = Math.round(e.x), y = Math.round(e.y);
+    px(x, y + 8, 54, 42, '#17111c');
+    px(x + 8, y, 38, 20, '#17111c');
+    px(x + 4, y + 38, 12, 12, '#0d0a10'); px(x + 38, y + 38, 12, 12, '#0d0a10');
+    px(x + 14, y + 16, 10, 14, '#f4f1e8'); px(x + 30, y + 16, 10, 14, '#f4f1e8');
+    px(x + 18, y + 20, 4, 6, '#c0392b'); px(x + 34, y + 20, 4, 6, '#c0392b');
+    px(x + 18, y + 36, 18, 4, '#3a1410');
+  }
+  function renderPixel() {
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, W, H);
+    if (pixelBgReady) {
+      // 参考图：废墟街道像素背景（视差）
+      const scale = H / pixelBg.naturalHeight;
+      const iw = pixelBg.naturalWidth * scale;
+      const off = -((camX * 0.35) % iw);
+      ctx.drawImage(pixelBg, off, -100, iw, H);
+      ctx.drawImage(pixelBg, off + iw, -100, iw, H);
+      ctx.fillStyle = 'rgba(20,12,10,0.18)';
+      ctx.fillRect(0, 0, W, H);
+    } else {
+      const bands = ['#1b2a4a', '#2b4560', '#4f6a7a', '#a97a5a', '#e8b06a', '#f7d6a4'];
+      for (let i = 0; i < bands.length; i++) px(0, i * 180, W, 181, bands[i]);
+      px(1450 - camX * 0.04, 420, 72, 72, '#ffe3a0');
+      px(1462 - camX * 0.04, 432, 48, 48, '#fff0c8');
+      const f2 = (camX * 0.2) % 120;
+      for (let i = 0; i < 42; i++) {
+        const bx = i * 120 - f2 - 120, bh = 120 + Math.floor(hash(i) * 5) * 40;
+        px(bx, 760 - bh, 96, bh, i % 2 ? '#26364a' : '#2f4158');
+        for (let w = 0; w < 3; w++) {
+          if (hash(i * 7 + w) > 0.42) px(bx + 18 + w * 24, 760 - bh + 26, 6, 9, '#e8c27a');
+          if (hash(i * 11 + w) > 0.6) px(bx + 18 + w * 24, 760 - bh + 58, 6, 9, '#b8d0d8');
+        }
+      }
+      px(0, 700, W, 140, '#2f5f74');
+      for (let i = 0; i < 26; i++) { const wx = (i * 90 - camX * 0.3) % (W + 120); px(wx, 720 + (i % 4) * 12, 46, 3, 'rgba(220,240,240,0.35)'); }
+      const bx0 = 220 - camX * 0.15;
+      px(bx0, 620, 1100, 10, '#b8462f'); px(bx0, 610, 1100, 6, '#d9774f');
+      for (let i = 0; i < 12; i++) { px(bx0 + i * 90, 590, 8, 50, '#8a2f22'); px(bx0 + i * 90 + 4, 596, 2, 38, '#5a1f16'); }
+      for (let i = 0; i < 11; i++) px(bx0 + i * 90 + 8, 600, 82, 2, '#e8a06a');
+      const pg = 780 - camX * 0.2;
+      px(pg - 26, 560, 52, 120, '#6b3a2a');
+      for (let i = 0; i < 4; i++) { px(pg - 44 - i * 4, 560 - i * 22, 88 + i * 8, 8, '#8a3a2a'); px(pg - 30, 552 - i * 22, 60, 10, '#5a2a20'); }
+      px(pg - 4, 430, 8, 40, '#e8b04a');
+    }
+
+    ctx.save(); ctx.translate(-camX, 0);
+    for (const p of scene.platforms) {
+      px(p.x, p.y, p.w, H - p.y, '#3a2e24');
+      // 石砖护岸纹理（与参考图江滩石阶衔接）
+      for (let yy = p.y + 24; yy < H; yy += 34) {
+        for (let xx = p.x + 4; xx < p.x + p.w - 4; xx += 56) {
+          px(xx, yy, 48, 24, hash(xx + yy) > 0.5 ? '#4a3a2c' : '#43342a');
+          px(xx + 6, yy + 5, 32, 2, '#5a4735');
+        }
+      }
+      px(p.x, p.y, p.w, 16, '#6b5640');
+      px(p.x, p.y, p.w, 4, '#8a6a4a');
+      px(p.x, p.y - 8, p.w, 8, '#4f7a3a');
+      for (let gx = p.x; gx < p.x + p.w; gx += 18) { px(gx, p.y - 14, 6, 6, '#6f9a4a'); px(gx + 9, p.y - 10, 4, 4, '#8ab85a'); }
+    }
+    for (const o of scene.oneways) { px(o.x, o.y, o.w, o.h, '#6b5640'); px(o.x, o.y, o.w, 4, '#8a6a4a'); }
+    for (const a of scene.anchors) { px(a.x - 14, a.y - 4, 28, 8, '#ffd68a'); px(a.x - 4, a.y - 14, 8, 28, '#ffd68a'); px(a.x - 6, a.y - 6, 12, 12, '#fff2d4'); }
+    for (const t of targets) if (!t.hit) { px(t.x - 22, t.y - 22, 44, 44, '#332a1a'); px(t.x - 16, t.y - 16, 32, 32, '#ffd68a'); px(t.x - 6, t.y - 6, 12, 12, '#fff2d4'); }
+    if (scene.id === 'G02') drawPixelDocOck(1600, 820, scene.t || 0);
+    if (scene.id === 'G03') drawPixelDocOck(scene.docX || 950, 820, scene.t || 0);
+    for (const p of projectiles) px(p.x - 16, p.y - 12, 32, 24, p.reflected ? '#ff8a3a' : '#d98a3a');
+    for (const e of enemies) if (e.alive) drawPixelMonster(e);
+    // 白色蜘蛛丝
+    if (player.swing) {
+      ctx.strokeStyle = 'rgba(255,255,250,0.95)';
+      ctx.lineWidth = 4;
+      ctx.setLineDash([14, 9]);
+      ctx.beginPath();
+      ctx.moveTo(player.x + player.w / 2, player.y + 44);
+      ctx.lineTo(player.swing.a.x, player.swing.a.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+      ctx.lineWidth = 8;
+      ctx.beginPath();
+      ctx.moveTo(player.x + player.w / 2, player.y + 44);
+      ctx.lineTo(player.swing.a.x, player.swing.a.y);
+      ctx.stroke();
+    }
+    drawPixelPlayer();
+    for (const s of shots) px(s.x - 4, s.y - 4, 8, 8, '#f3f1e8');
+    for (const p of particles) px(p.x - 2, p.y - 2, 4, 4, p.color);
+    ctx.restore();
+  }
+
+  function render() {
+    if (scene.pixel) { renderPixel(); return; }
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    // 天空
+    const themes = { dawn: ['#2b4d54', '#7f9385', '#f7d6a4'], dusk: ['#4a2c4f', '#b06a54', '#e8a86a'], night: ['#14222a', '#2b4a54', '#4a5560'] };
+    const t = themes[scene.theme] || themes.dawn;
+    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, t[0]); g.addColorStop(0.5, t[1]); g.addColorStop(1, t[2]);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    if (scene.theme !== 'night') { const sx = 1500 - camX * 0.06; ctx.fillStyle = '#fff1c8'; ctx.beginPath(); ctx.arc(sx, 460, 52, 0, Math.PI * 2); ctx.fill(); }
+    // 远景
+    ctx.save(); ctx.translate(-camX * 0.18, 0);
+    ctx.fillStyle = scene.theme === 'night' ? '#26363a' : '#9fb0a2'; ctx.fillRect(-400, 620, scene.width + 800, 220);
+    for (let i = 0; i < 40; i++) { const bx = i * 200 - 200, bh = 150 + hash(i) * 240; ctx.fillStyle = scene.theme === 'night' ? '#26363a' : '#4b5d5c'; ctx.fillRect(bx, 660 - bh, 150, bh + 200); }
+    ctx.restore();
+    // 平台
+    ctx.save(); ctx.translate(-camX, 0);
+    for (const p of scene.platforms) { const b = ctx.createLinearGradient(0, p.y, 0, H); b.addColorStop(0, '#8a7255'); b.addColorStop(1, '#4c3c2d'); ctx.fillStyle = b; ctx.fillRect(p.x, p.y, p.w, H - p.y); ctx.fillStyle = '#b3936f'; ctx.fillRect(p.x, p.y, p.w, 12); ctx.fillStyle = '#e2c99c'; ctx.fillRect(p.x, p.y, p.w, 3); }
+    for (const o of scene.oneways) { ctx.fillStyle = '#b3936f'; ctx.fillRect(o.x, o.y, o.w, o.h); ctx.fillStyle = '#e2c99c'; ctx.fillRect(o.x, o.y, o.w, 3); }
+    for (let i = 0; i < scene.goo.length; i++) { const gg = scene.goo[i]; ctx.fillStyle = '#17111c'; ctx.beginPath(); ctx.ellipse(gg.x, gg.y - 4, gg.r, gg.r * 0.26, 0, 0, Math.PI * 2); ctx.fill(); }
+    for (const a of scene.anchors) { ctx.strokeStyle = 'rgba(255,214,140,0.7)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(a.x, a.y, 18, 0, Math.PI * 2); ctx.stroke(); ctx.fillStyle = '#fff2d4'; ctx.beginPath(); ctx.arc(a.x, a.y, 4, 0, Math.PI * 2); ctx.fill(); }
+    for (const n of scene.nodes || []) { if (!n.reached) { ctx.strokeStyle = '#ffd98a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(n.x, n.y - 20, 24, 0, Math.PI * 2); ctx.stroke(); ctx.fillStyle = '#fff2d4'; ctx.font = '700 14px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(n.l, n.x, n.y - 20); } else { ctx.strokeStyle = '#8fd8b0'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(n.x - 10, n.y - 20); ctx.lineTo(n.x - 2, n.y - 12); ctx.lineTo(n.x + 12, n.y - 28); ctx.stroke(); } }
+    for (const t of targets) if (!t.hit) { ctx.strokeStyle = '#ffb14a'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(t.x, t.y, t.r, 0, Math.PI * 2); ctx.stroke(); ctx.fillStyle = '#fff2d4'; ctx.font = '700 13px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(t.label, t.x, t.y - t.r - 8); }
+    for (const e of enemies) if (e.alive) { ctx.fillStyle = '#17111c'; ctx.beginPath(); ctx.ellipse(e.x + e.w / 2, e.y + e.h / 2, e.w / 2, e.h / 2, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#f4f1e8'; ctx.beginPath(); ctx.ellipse(e.x + e.w / 2 - 14, e.y + 40, 10, 16, 0, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.ellipse(e.x + e.w / 2 + 14, e.y + 40, 10, 16, 0, 0, Math.PI * 2); ctx.fill(); }
+    if (scene.id === 'G08') { const vx = scene.width - 340, vy = 700; ctx.fillStyle = '#17111c'; ctx.beginPath(); ctx.ellipse(vx, vy, 150, 170, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#f4f1e8'; ctx.beginPath(); ctx.ellipse(vx - 40, vy - 60, 26, 40, 0, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.ellipse(vx + 40, vy - 60, 26, 40, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#ffd98a'; ctx.font = '700 16px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('毒液 ' + scene.boss.webs + '/12', vx, vy - 180); }
+    // 玩家
+    const px = player.x + player.w / 2, py = player.y + player.h;
+    if (player.swing) { ctx.strokeStyle = 'rgba(240,240,220,0.9)'; ctx.lineWidth = 3; ctx.setLineDash([10, 6]); ctx.beginPath(); ctx.moveTo(px + player.facing * 10, py - 108); ctx.lineTo(player.swing.a.x, player.swing.a.y); ctx.stroke(); ctx.setLineDash([]); }
+    ctx.save(); ctx.translate(px, py); ctx.scale(player.facing, 1);
+    if (player.invuln > 0 && Math.floor(S.time * 12) % 2 === 0) ctx.globalAlpha = 0.45;
+    const run = player.grounded && Math.abs(player.vx) > 20 ? Math.sin(player.anim * 14) : 0;
+    const RED = '#c0392b', DARK = '#1d1a1c', BLUE = '#2e4c8a', EYE = '#f4f1e8';
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = BLUE; ctx.lineWidth = 15; ctx.beginPath(); ctx.moveTo(-4, -56); ctx.lineTo(-4 - run * 16, -14); ctx.stroke();
+    ctx.strokeStyle = RED; ctx.lineWidth = 12; ctx.beginPath(); ctx.moveTo(-12, -96); ctx.lineTo(-16, -68); ctx.stroke();
+    roundRectPath(ctx, -17, -108, 34, 52, 12); ctx.fillStyle = RED; ctx.fill(); ctx.strokeStyle = DARK; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = BLUE; ctx.fillRect(-17, -72, 34, 16);
+    ctx.strokeStyle = BLUE; ctx.lineWidth = 15; ctx.beginPath(); ctx.moveTo(4, -56); ctx.lineTo(4 + run * 16, -14); ctx.stroke();
+    ctx.strokeStyle = RED; ctx.lineWidth = 12; ctx.beginPath(); ctx.moveTo(12, -96); ctx.lineTo(16, -68); ctx.stroke();
+    ctx.fillStyle = RED; ctx.beginPath(); ctx.arc(0, -128, 19, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = DARK; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = EYE; ctx.beginPath(); ctx.ellipse(-7, -130, 7, 9, -0.3, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.ellipse(7, -130, 7, 9, 0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.restore(); ctx.globalAlpha = 1;
+    for (const s of shots) { ctx.fillStyle = '#f3f1e8'; ctx.beginPath(); ctx.arc(s.x, s.y, 5, 0, Math.PI * 2); ctx.fill(); }
+    for (const p of particles) { ctx.globalAlpha = clamp(p.life * 2, 0, 1); ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  function getHint() {
+    const id = scene ? scene.id : '';
+    if (id === 'G01') return { title: 'G01 · 飞向绿地中心', text: '像素风横版：按住 E / 右键吸附头顶发光锚点摆荡，A/D 移动、Space 跳跃；地面小怪碰到会扣血，左键 / J 蛛网弹可一击击飞。' };
+    if (id === 'G02') {
+      if (!scene.combatStarted) return { title: 'G02 · 接近章鱼博士', text: '沿天台向右走到章鱼博士身边，会触发两段对白和两张独立漫画；听完后战斗开始。' };
+      const b = scene.boss;
+      if (b.phase === 1) return { title: 'G02 · 反击章鱼博士', text: '等博士扔出工具箱。它飞近时按 Shift 闪避，或按左键 / J 射蛛网把工具箱反弹回去。命中 3 次后博士僵直。' };
+      if (b.phase === 2) return { title: 'G02 · 绑住 4 根机械爪', text: '30 秒内朝 4 个发光爪点各射 1 发蛛网（左键 / J）；屏幕中心十字准星用来瞄准。超时会重置，可重试。' };
+      return { title: 'G02 · 拔除芯片', text: '走到章鱼博士身边（画面右侧），按 F 拔掉后颈芯片。' };
+    }
+    if (id === 'G03') return { title: 'G03 · 握手言和', text: '听完博士的道谢，走到他身边按 F 击掌，剧情会进入 3D 第二章。' };
+    if (id === 'G04') return { title: 'G04 · 追踪黑液', text: '沿地面的黑色粘液一路向右，经过 5 个发光节点即可抵达龟山电视塔。掉下去会回到最近检查点，不会卡关。' };
+    if (id === 'G05') return { title: 'G05 · 穿过传送门', text: '走到右侧金橙色的传送门旁边，按 F（或直接走进门里）触发过场。' };
+    if (id === 'G06') return { title: 'G06 · 纽约追踪', text: '继续沿黑液痕迹向右穿过雨夜街巷，走到废弃工厂大门即可进入下一段。' };
+    if (id === 'G07') return { title: 'G07 · 清掉毒液小兵', text: '用左键 / J 发射蛛网弹，每只小兵需要 3 发；清完 3 只钢铁侠就会破门救场。' };
+    if (id === 'G08') return { title: 'G08 · 困住毒液', text: '躲开毒液的猛扑；它硬直时连续按左键 / J 射网，累计 12 层后按 F（或 Q）呼叫钢铁侠。' };
+    if (id === 'G09') return { title: 'G09 · 背埃迪回家', text: '按住 D / → 背着他向右走，走到公寓门口就会进入第三章。' };
+    return { title: '提示', text: '继续向右推进剧情。' };
+  }
+
+  return { enter, update, render, onInteract, trySwing, releaseSwing, shootWeb, getHint };
+}
