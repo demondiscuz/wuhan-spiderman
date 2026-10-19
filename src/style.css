@@ -605,7 +605,7 @@ body {
 .touch-btn:active { background: rgba(184, 58, 46, 0.82); }
 .touch-small { width: 52px; height: 52px; font-size: 15px; }
 
-@media (pointer: coarse) {
+@media (pointer: coarse), (max-width: 900px) {
   #touchControls { display: flex; }
   .hint-bar { display: none; }
 }
@@ -907,3 +907,91 @@ body {
 #stage16x9.video-mode #interactPrompt { display: none !important; }
 
 .credit-sub { font-size: 12px; color: #d9b08a; margin: 2px 0 10px; letter-spacing: .04em; }
+
+/* ================= v17 mobile / tablet ================= */
+@media (pointer: coarse), (max-width: 1280px) {
+  #topBar { padding: 6px 8px 0; min-height: 54px; }
+  .dayline { font-size: 11px; }
+  .weather { font-size: 8px; }
+  .icon-btn { width: 26px; height: 26px; font-size: 11px; }
+  .top-actions { gap: 4px; }
+  #playerCard { top: 52px; left: 6px; padding: 4px 7px 4px 5px; gap: 6px; }
+  .avatar { width: 30px; height: 30px; font-size: 15px; }
+  .player-name { font-size: 10px; }
+  .hearts { font-size: 11px; gap: 1px; margin-top: 2px; }
+  #resources { top: 52px; right: 6px; gap: 3px; }
+  .chip { height: 22px; padding: 0 5px; font-size: 8px; gap: 3px; }
+  .chip b { font-size: 10px; }
+  .chip-icon { font-size: 9px; }
+  .chip-max { font-size: 8px; }
+  #objectiveCard { top: 84px; right: 6px; width: min(44%, 200px); padding: 6px 8px; border-radius: 10px; }
+  .objective-label { font-size: 8px; }
+  .objective-title { font-size: 11px; line-height: 1.25; }
+  .objective-sub { font-size: 8px; line-height: 1.3; margin-top: 2px; }
+  .objective-progress { font-size: 8px; margin-top: 4px; }
+  #enemyBar { top: 84px; width: 44%; padding: 5px 8px; }
+  .enemy-name, .enemy-hp { font-size: 10px; }
+  .enemy-track { height: 5px; margin-top: 3px; }
+
+  #dialogueBubble.dialogue-bubble {
+    left: 6px; right: auto; top: auto; bottom: calc(108px + env(safe-area-inset-bottom));
+    width: min(52%, 340px); max-width: 340px; padding: 8px 10px 6px;
+    transform: none; max-height: 28%; overflow: auto;
+  }
+  .dialogue-row { gap: 7px; }
+  .dialogue-avatar { width: 30px; height: 30px; font-size: 16px; border-radius: 8px; }
+  .dialogue-speaker { font-size: 9px; }
+  #dialogueBubble .dialogue-text { font-size: 11.5px; line-height: 1.45; }
+  .dialogue-hint { font-size: 8px; margin-top: 2px; }
+
+  #comic.comic {
+    left: 50%; right: auto; top: 7%; transform: translateX(-50%);
+    width: min(31%, 270px); border-width: 3px; border-radius: 6px;
+  }
+  #comic.comic .comic-hint { font-size: 8px; padding: 3px 7px; bottom: 5px; }
+
+  #bottomBar, #locationLabel, #hintBar { display: none !important; }
+  #touchControls { bottom: max(6px, env(safe-area-inset-bottom)); padding: 0 6px; }
+  .touch-left { gap: 6px; }
+  .touch-right { display: grid; grid-template-columns: repeat(3, auto); gap: 6px; align-items: end; }
+  .touch-btn { width: 46px; height: 46px; font-size: 13px; background: rgba(32,24,17,.38); backdrop-filter: blur(3px); }
+  .touch-small { width: 42px; height: 42px; font-size: 11px; }
+  #interactPrompt { bottom: calc(108px + env(safe-area-inset-bottom)); font-size: 11px; padding: 6px 10px 6px 7px; }
+  .interact-key { width: 22px; height: 22px; font-size: 12px; }
+  #hintCard { width: min(86%, 300px); right: 6px; bottom: calc(108px + env(safe-area-inset-bottom)); padding: 9px 11px; }
+  .hint-text { font-size: 10px; }
+
+  .start-card { padding: 18px 16px 16px; }
+  .start-card h1 { font-size: 28px; }
+  .start-card p { font-size: 12px; }
+  .start-btn { font-size: 14px; padding: 10px 26px; }
+  .overlay { padding: 12px; }
+}
+
+/* 竖屏手机：直接提示横屏，避免 16:9 被压成一条 */
+@media (orientation: portrait) and (max-width: 900px) {
+  #touchControls { display: none !important; }
+  #rotateHint { display: flex !important; }
+}
+#rotateHint {
+  display: none; position: fixed; inset: 0; z-index: 200;
+  background: radial-gradient(circle at 50% 35%, #1b1410, #07080a 70%);
+  color: #f6eedc; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; text-align: center; padding: 24px;
+}
+#rotateHint .rotate-icon { font-size: 54px; animation: rotateHint 1.8s ease-in-out infinite; }
+#rotateHint p { margin: 0; font-size: 22px; letter-spacing: .08em; }
+#rotateHint span { color: #d9b08a; font-size: 12px; }
+@keyframes rotateHint { 0%,100% { transform: rotate(0); } 50% { transform: rotate(90deg); } }
+
+/* v17 mobile refinements */
+@media (pointer: coarse), (max-width: 1280px) {
+  #comic.comic { width: min(28%, 250px); }
+  #dialogueBubble.dialogue-bubble { max-height: 31%; scrollbar-width: none; }
+  #dialogueBubble.dialogue-bubble::-webkit-scrollbar { display: none; }
+  #dialogueBubble .dialogue-hint { display: none; }
+  .credit-title { font-size: 24px; }
+  .credit-name { font-size: 15px; }
+  .credit-sub { font-size: 10px; }
+  .credits-track { width: 86%; }
+}

@@ -282,6 +282,7 @@ async function startGame() {
   try { audio.bgm('bgm_fly'); } catch (e) { console.warn(e); }
   ui.el.startOverlay.classList.add('hidden');
   S.state = 'playing'; S.moduleId = ''; setMode('3d');
+  try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {}); } catch (e) {}
   playIntro();
 }
 function setPaused(v) { if (S.state !== 'playing' || S._hintPaused) return; S.paused = v; ui.el.pauseOverlay.classList.toggle('hidden', !v); if (v) audio.suspend(); else audio.resume(); }
@@ -360,7 +361,19 @@ function bindInput() {
   window.addEventListener('contextmenu', (e) => e.preventDefault());
   document.querySelectorAll('[data-touch]').forEach((btn) => {
     const act = btn.dataset.touch;
-    const down = (e) => { e.preventDefault(); if (act === 'left') I.left = true; if (act === 'right') I.right = true; if (act === 'jump') I.jumpBuffer = 0.12; if (act === 'swing') { I.swingHeld = true; if (S.moduleId) active().trySwing(); } if (act === 'dodge') I.dodge = true; };
+    const down = (e) => {
+      e.preventDefault();
+      if (act === 'left') I.left = true;
+      if (act === 'right') I.right = true;
+      if (act === 'jump') I.jumpBuffer = 0.12;
+      if (act === 'shoot') I.shoot = true;
+      if (act === 'interact') {
+        if (S.dialogueActive) skipDialogue();
+        else if (S.moduleId) active().onInteract();
+      }
+      if (act === 'swing') { I.swingHeld = true; if (S.moduleId) active().trySwing(); }
+      if (act === 'dodge') I.dodge = true;
+    };
     const up = (e) => { e.preventDefault(); if (act === 'left') I.left = false; if (act === 'right') I.right = false; if (act === 'swing') { I.swingHeld = false; if (S.moduleId) active().releaseSwing(); } };
     btn.addEventListener('pointerdown', down); btn.addEventListener('pointerup', up); btn.addEventListener('pointerleave', up);
   });
