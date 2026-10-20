@@ -58,6 +58,18 @@ export function createAudio(debug = false) {
 
   return {
     async init() { await init(); },
+    // 批量预加载：按槽位名逐个 ensure，缺失自动容错；onProgress 收到 (完成数/总数)
+    async preload(names, onProgress) {
+      const list = Array.isArray(names) ? names : [];
+      const total = Math.max(1, list.length);
+      let done = 0;
+      for (const n of list) {
+        try { await ensure(n); } catch (e) { /* 容错 */ }
+        done++;
+        if (onProgress) onProgress(done / total);
+      }
+      return done;
+    },
     async bgm(name) {
       if (a.currentBgm === name) return;
       stop('bgm:' + a.currentBgm);

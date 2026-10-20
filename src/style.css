@@ -995,3 +995,31 @@ body {
   .credit-sub { font-size: 10px; }
   .credits-track { width: 86%; }
 }
+
+/* v18 章节资源加载层（简约：背景图 + 细进度条 + 百分比） */
+#loadingOverlay { z-index: 18; background: #0b0805; }
+#loadingOverlay #loadingImg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; opacity: .5; filter: brightness(.6);
+}
+#loadingOverlay .loading-shade {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(7,8,10,.16) 0%, rgba(7,8,10,.38) 60%, rgba(7,8,10,.8) 100%);
+}
+.loading-bar-wrap {
+  position: absolute; left: 50%; bottom: 13%; transform: translateX(-50%);
+  width: min(420px, 58%); text-align: center;
+}
+.loading-track {
+  height: 3px; border-radius: 2px; overflow: hidden;
+  background: rgba(246,238,220,.16);
+}
+#loadingFill {
+  height: 100%; width: 0%; border-radius: 2px;
+  background: #ffd68a;
+  transition: width .18s linear;
+}
+#loadingPct {
+  margin-top: 12px; font-size: 13px; letter-spacing: .14em;
+  color: #e8e0d0; font-variant-numeric: tabular-nums;
+}

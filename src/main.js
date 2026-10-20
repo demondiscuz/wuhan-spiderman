@@ -58,6 +58,61 @@ const COMICS = {
   v4: 'comics/v4.webp'
 };
 
+/* v18 章节资源预加载：跨章节过渡图片 + 每章所需音频/图片/视频清单 */
+const CHAPTER_IMG = {
+  ch2: `${import.meta.env.BASE_URL}comics/ch2_transition.webp`,
+  ch3: `${import.meta.env.BASE_URL}comics/ch3_transition.webp`
+};
+const CHAPTER_ASSETS = {
+  ch1: {
+    audio: ['bgm_fly', 'bgm_battle', 'bgm_normal', 'sfx_wind', 'sfx_swing', 'sfx_impact', 'sfx_mech', 'sfx_jet', 'sfx_misc', 'vo_d00', 'vo_d01', 'vo_d02', 'vo_d03', 'vo_d04'],
+    images: ['comics/docock.webp', 'comics/docock2.webp', 'comics/chip_pull.webp', 'comics/handshake.webp', 'comics/ch1_pixel_bg.webp'],
+    video: ['v0']
+  },
+  ch2: {
+    audio: ['bgm_normal', 'bgm_battle', 'sfx_wind', 'sfx_goo', 'sfx_portal', 'sfx_ambient_ny', 'sfx_swing', 'sfx_impact', 'sfx_mech', 'sfx_jet', 'sfx_misc', 'sfx_spider_sense', 'vo_d05', 'vo_d06', 'vo_d07', 'vo_d08', 'vo_d09', 'vo_d10'],
+    images: ['comics/track.webp', 'comics/v1.webp', 'comics/v2.webp', 'comics/v3.webp', 'comics/eddie.webp'],
+    video: []
+  },
+  ch3: {
+    audio: ['bgm_normal', 'bgm_thanks', 'bgm_wukong', 'sfx_wind', 'sfx_swing', 'sfx_impact', 'sfx_mech', 'sfx_jet', 'sfx_misc', 'sfx_thunder', 'vo_d11', 'vo_d12'],
+    images: ['comics/v4.webp', 'comics/wukong.webp'],
+    video: []
+  }
+};
+
+function preloadImage(src) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve();
+    img.onerror = () => resolve();
+    img.src = `${import.meta.env.BASE_URL}${src}`;
+  });
+}
+function preloadVideo(id) {
+  return new Promise((resolve) => {
+    const v = document.createElement('video');
+    v.preload = 'auto'; v.muted = true; v.playsInline = true;
+    let settled = false;
+    const done = () => { if (settled) return; settled = true; v.removeAttribute('src'); v.load(); resolve(); };
+    v.onloadeddata = done;
+    v.onerror = done;
+    v.src = `${import.meta.env.BASE_URL}video/${id}.mp4`;
+    setTimeout(done, 15000); // 弱网兜底：15s 后视为完成，不阻塞进入
+  });
+}
+function loadChapterAssets(ch, onProgress) {
+  const c = CHAPTER_ASSETS[ch] || { audio: [], images: [], video: [] };
+  let done = 0;
+  const total = c.audio.length + c.images.length + c.video.length;
+  const tick = () => { done++; if (onProgress && total) onProgress(done / total); };
+  const tasks = [];
+  for (const n of c.audio) tasks.push(audio.preload([n]).then(tick));
+  for (const src of c.images) tasks.push(preloadImage(src).then(tick));
+  for (const vid of c.video) tasks.push(preloadVideo(vid).then(tick));
+  return Promise.all(tasks).then(() => done);
+}
+
 /* v13：平面二维卡通双手（手背 / 手心两张 SVG） */
 const HAND_BACK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 240">
 <g fill="#c0392b" stroke="#2b0d0a" stroke-width="6" stroke-linejoin="round">
@@ -213,9 +268,8 @@ function setMode(mode) {
   if (hands) hands.classList.toggle('hidden', mode !== '3d');
 }
 
-function goTo(id) {
-  S.moduleId = id;
-  const ch = chapterOf(id); S.chapter = ch;
+function enterScene(id) {
+  const ch = S.chapter;
   const mode = ch === 'ch1' ? '2d' : '3d';
   setMode(mode);
   // 切场景时清理所有“暂停/锁输入/提示/血条/对白”残留，避免传送后无法操作
@@ -228,8 +282,27 @@ function goTo(id) {
   ui.hideHint(); ui.hideEnemyBar(); ui.hideInteract(); audio.resume();
   ui.el.topLocation.textContent = LOCATIONS[id] || CHAPTERS[ch].title;
   ui.el.locationLabel.textContent = id + ' · ' + (LOCATIONS[id] || '');
-  if (S.chapterTitle !== ch) { S.chapterTitle = ch; ui.showChapterCard(CHAPTERS[ch].kicker, CHAPTERS[ch].title, CHAPTERS[ch].sub); }
   if (mode === '2d') scenes2d.enter(id); else scenes3d.enter(id);
+}
+
+function goTo(id) {
+  const ch = chapterOf(id);
+  const firstInChapter = ch !== S.chapterTitle;
+  S.moduleId = id; S.chapter = ch;
+  // v18：跨章节切换 → 显示章节过渡图 + 预加载该章全部资源（进度条 + 百分比），加载完自动进入
+  if (firstInChapter && ch !== 'ch1') {
+    S.chapterTitle = ch; // 立即标记，避免加载期间重复触发
+    const img = CHAPTER_IMG[ch];
+    ui.showLoading({ img });
+    loadChapterAssets(ch, (p) => ui.updateLoading(p * 100)).then(() => {
+      ui.hideLoading();
+      enterScene(id);
+    });
+    return;
+  }
+  // ch1 首次进入已在 boot 预加载完成；章内切换直接进入（不再显示章节文字卡片）
+  S.chapterTitle = ch;
+  enterScene(id);
 }
 function goNext() { const i = ORDER.indexOf(S.moduleId); if (i >= 0 && i < ORDER.length - 1) goTo(ORDER[i + 1]); else end(); }
 let creditsTimer = 0;
@@ -278,11 +351,14 @@ async function startGame() {
   if (S.state !== 'title') return;
   ui.el.startBtn.disabled = true;
   try { await audio.init(); } catch (e) { console.warn(e); }
-  // 点击开始即播放“欧耶”主题 BGM（bgm_fly），不等 v0 结束
-  try { audio.bgm('bgm_fly'); } catch (e) { console.warn(e); }
+  // v18：boot 启动画面预加载第一章全部资源（进度条 + 百分比），完成后进入开场，第一章游玩零临时加载
   ui.el.startOverlay.classList.add('hidden');
+  ui.showLoading({ img: `${import.meta.env.BASE_URL}boot.webp` });
   S.state = 'playing'; S.moduleId = ''; setMode('3d');
   try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {}); } catch (e) {}
+  await loadChapterAssets('ch1', (p) => ui.updateLoading(p * 100));
+  ui.hideLoading();
+  try { audio.bgm('bgm_fly'); } catch (e) { console.warn(e); }
   playIntro();
 }
 function setPaused(v) { if (S.state !== 'playing' || S._hintPaused) return; S.paused = v; ui.el.pauseOverlay.classList.toggle('hidden', !v); if (v) audio.suspend(); else audio.resume(); }

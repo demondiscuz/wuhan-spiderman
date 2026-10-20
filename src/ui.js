@@ -14,6 +14,7 @@ export function createUI() {
     btnAudio: $('btnAudio'), btnPause: $('btnPause'), btnFullscreen: $('btnFullscreen'), btnJournal: $('btnJournal'), btnHint: $('btnHint'),
     stage: $('stage16x9'), cutscene: $('cutscene'),
     chapterCard: $('chapterCard'), chapterKicker: $('chapterKicker'), chapterTitle: $('chapterTitle'), chapterSub: $('chapterSub'),
+    loadingOverlay: $('loadingOverlay'), loadingImg: $('loadingImg'), loadingFill: $('loadingFill'), loadingPct: $('loadingPct'),
     hintCard: $('hintCard'), hintTitle: $('hintTitle'), hintText: $('hintText'), hintClose: $('hintClose'), hintOk: $('hintOk'), hintRetry: $('hintRetry'),
     dialogueAvatar: $('dialogueAvatar'),
     enemyBar: $('enemyBar'), enemyName: $('enemyName'), enemyHpText: $('enemyHpText'), enemyFill: $('enemyFill'),
@@ -38,6 +39,20 @@ export function createUI() {
     el.chapterCard.classList.remove('hidden');
     clearTimeout(el._cardTimer); el._cardTimer = setTimeout(() => el.chapterCard.classList.add('hidden'), ms);
   }
+  /* 章节资源加载层：可带背景图（img 为完整 URL 或空） */
+  function showLoading({ img } = {}) {
+    if (img) { el.loadingImg.src = img; el.loadingImg.classList.remove('hidden'); }
+    else el.loadingImg.classList.add('hidden');
+    el.loadingFill.style.width = '0%';
+    el.loadingPct.textContent = '0%';
+    el.loadingOverlay.classList.remove('hidden');
+  }
+  function updateLoading(pct) {
+    const p = Math.max(0, Math.min(100, Math.round(pct)));
+    el.loadingFill.style.width = p + '%';
+    el.loadingPct.textContent = p + '%';
+  }
+  function hideLoading() { el.loadingOverlay.classList.add('hidden'); }
   function setObjective(title, sub, progress) {
     el.objectiveTitle.textContent = title;
     if (sub != null) el.objectiveSub.textContent = sub;
@@ -68,5 +83,5 @@ export function createUI() {
     el.interactPrompt.classList.remove('hidden');
   }
   function hideInteract() { if (el.interactPrompt) el.interactPrompt.classList.add('hidden'); }
-  return { el, buildHearts, setHearts, toast, showChapterCard, setObjective, setLocation, showHint, hideHint, setEnemyBar, hideEnemyBar, showInteract, hideInteract };
+  return { el, buildHearts, setHearts, toast, showChapterCard, showLoading, updateLoading, hideLoading, setObjective, setLocation, showHint, hideHint, setEnemyBar, hideEnemyBar, showInteract, hideInteract };
 }
