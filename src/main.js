@@ -32,7 +32,7 @@ camera.rotation.order = 'YXZ';
 
 /* ---------- 状态 / 输入 ---------- */
 const S = {
-  mode: '3d', moduleId: '', chapter: 'ch1', chapterTitle: '', state: 'title', paused: false, completed: false,
+  mode: '3d', moduleId: '', chapter: 'ch1', chapterTitle: '', state: 'title', paused: false, completed: false, webReady: false,
   hearts: 5, maxHearts: 5, parts: 0, intel: 0, web: 60, webMax: 60,
   objective: '', objectiveSub: '', objectiveProgress: '', dialogueQueue: [], dialogueActive: false, lockInput: 0, muted: false, time: 0, respawn: {}, comicActive: false, dialogueEndCallback: null
 };
@@ -58,24 +58,32 @@ const COMICS = {
   v4: 'comics/v4.webp'
 };
 
-/* v18 章节资源预加载：跨章节过渡图片 + 每章所需音频/图片/视频清单 */
+/* v18 章节资源预加载：跨章节过渡图片 + 每章所需音频/图片/视频清单
+ * v19：加载画面最短停留 4 秒 + 每章顶部提示语 */
+const MIN_LOAD_MS = 4000;
+const waitMin = (ms) => new Promise((r) => setTimeout(r, ms));
+const CHAPTER_TIPS = {
+  ch1: '在武汉高空荡丝飞跃，跟随教学打败失控的章鱼博士！',
+  ch2: '追踪神秘黑液穿过传送门，在纽约雨夜街头查明真相！',
+  ch3: '回到黄昏天台整理战衣，抬头仰望，迎接意想不到的客人……'
+};
 const CHAPTER_IMG = {
   ch2: `${import.meta.env.BASE_URL}comics/ch2_transition.webp`,
   ch3: `${import.meta.env.BASE_URL}comics/ch3_transition.webp`
 };
 const CHAPTER_ASSETS = {
   ch1: {
-    audio: ['bgm_fly', 'bgm_battle', 'bgm_normal', 'sfx_wind', 'sfx_swing', 'sfx_impact', 'sfx_mech', 'sfx_jet', 'sfx_misc', 'vo_d00', 'vo_d01', 'vo_d02', 'vo_d03', 'vo_d04'],
+    audio: ['bgm_fly', 'bgm_battle', 'bgm_normal', 'sfx_wind', 'sfx_swing', 'sfx_impact', 'sfx_mech', 'sfx_jet', 'sfx_misc', 'sfx_heart', 'vo_d00', 'vo_d01', 'vo_d02', 'vo_d03', 'vo_d04'],
     images: ['comics/docock.webp', 'comics/docock2.webp', 'comics/chip_pull.webp', 'comics/handshake.webp', 'comics/ch1_pixel_bg.webp'],
     video: ['v0']
   },
   ch2: {
-    audio: ['bgm_normal', 'bgm_battle', 'sfx_wind', 'sfx_goo', 'sfx_portal', 'sfx_ambient_ny', 'sfx_swing', 'sfx_impact', 'sfx_mech', 'sfx_jet', 'sfx_misc', 'sfx_spider_sense', 'vo_d05', 'vo_d06', 'vo_d07', 'vo_d08', 'vo_d09', 'vo_d10'],
+    audio: ['bgm_normal', 'bgm_battle', 'sfx_wind', 'sfx_goo', 'sfx_portal', 'sfx_ambient_ny', 'sfx_swing', 'sfx_impact', 'sfx_mech', 'sfx_jet', 'sfx_misc', 'sfx_spider_sense', 'sfx_heart', 'vo_d05', 'vo_d06', 'vo_d07', 'vo_d08', 'vo_d09', 'vo_d10'],
     images: ['comics/track.webp', 'comics/v1.webp', 'comics/v2.webp', 'comics/v3.webp', 'comics/eddie.webp'],
     video: []
   },
   ch3: {
-    audio: ['bgm_normal', 'bgm_thanks', 'bgm_wukong', 'sfx_wind', 'sfx_swing', 'sfx_impact', 'sfx_mech', 'sfx_jet', 'sfx_misc', 'sfx_thunder', 'vo_d11', 'vo_d12'],
+    audio: ['bgm_normal', 'bgm_thanks', 'bgm_wukong', 'sfx_wind', 'sfx_swing', 'sfx_impact', 'sfx_mech', 'sfx_jet', 'sfx_misc', 'sfx_thunder', 'sfx_heart', 'vo_d11', 'vo_d12'],
     images: ['comics/v4.webp', 'comics/wukong.webp'],
     video: []
   }
@@ -266,6 +274,13 @@ function setMode(mode) {
   ui.el.stage.classList.toggle('mode-2d', mode === '2d');
   const hands = document.getElementById('firstPersonHands');
   if (hands) hands.classList.toggle('hidden', mode !== '3d');
+  // v19：前/后移动键仅在 3D 模式显示
+  const tc = document.getElementById('touchControls');
+  if (tc) tc.classList.toggle('touch-nav-on', mode === '3d');
+}
+function resetWebReady() {
+  S.webReady = false;
+  document.querySelectorAll('[data-touch="swing"]').forEach((b) => b.classList.remove('active'));
 }
 
 function enterScene(id) {
@@ -280,6 +295,7 @@ function enterScene(id) {
   audio.stopVo();
   hideComic();
   ui.hideHint(); ui.hideEnemyBar(); ui.hideInteract(); audio.resume();
+  resetWebReady();
   ui.el.topLocation.textContent = LOCATIONS[id] || CHAPTERS[ch].title;
   ui.el.locationLabel.textContent = id + ' · ' + (LOCATIONS[id] || '');
   if (mode === '2d') scenes2d.enter(id); else scenes3d.enter(id);
@@ -290,11 +306,15 @@ function goTo(id) {
   const firstInChapter = ch !== S.chapterTitle;
   S.moduleId = id; S.chapter = ch;
   // v18：跨章节切换 → 显示章节过渡图 + 预加载该章全部资源（进度条 + 百分比），加载完自动进入
+  // v19：加载画面最短停留 4 秒（100% 后仍等待满 4 秒），并显示本段场景提示语
   if (firstInChapter && ch !== 'ch1') {
     S.chapterTitle = ch; // 立即标记，避免加载期间重复触发
     const img = CHAPTER_IMG[ch];
-    ui.showLoading({ img });
-    loadChapterAssets(ch, (p) => ui.updateLoading(p * 100)).then(() => {
+    ui.showLoading({ img, tip: CHAPTER_TIPS[ch] });
+    Promise.all([
+      loadChapterAssets(ch, (p) => ui.updateLoading(p * 100)),
+      waitMin(MIN_LOAD_MS)
+    ]).then(() => {
       ui.hideLoading();
       enterScene(id);
     });
@@ -352,11 +372,15 @@ async function startGame() {
   ui.el.startBtn.disabled = true;
   try { await audio.init(); } catch (e) { console.warn(e); }
   // v18：boot 启动画面预加载第一章全部资源（进度条 + 百分比），完成后进入开场，第一章游玩零临时加载
+  // v19：boot 加载同样最短停留 4 秒 + 第一章提示语
   ui.el.startOverlay.classList.add('hidden');
-  ui.showLoading({ img: `${import.meta.env.BASE_URL}boot.webp` });
+  ui.showLoading({ img: `${import.meta.env.BASE_URL}boot.webp`, tip: CHAPTER_TIPS.ch1 });
   S.state = 'playing'; S.moduleId = ''; setMode('3d');
   try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {}); } catch (e) {}
-  await loadChapterAssets('ch1', (p) => ui.updateLoading(p * 100));
+  await Promise.all([
+    loadChapterAssets('ch1', (p) => ui.updateLoading(p * 100)),
+    waitMin(MIN_LOAD_MS)
+  ]);
   ui.hideLoading();
   try { audio.bgm('bgm_fly'); } catch (e) { console.warn(e); }
   playIntro();
@@ -441,18 +465,47 @@ function bindInput() {
       e.preventDefault();
       if (act === 'left') I.left = true;
       if (act === 'right') I.right = true;
+      if (act === 'forward') I.forward = true;
+      if (act === 'back') I.back = true;
       if (act === 'jump') I.jumpBuffer = 0.12;
-      if (act === 'shoot') I.shoot = true;
+      if (act === 'shoot') {
+        // v19：丝键预备状态下一次点击“网”→ 优先摆荡（消耗预备）；否则照常发射
+        if (S.webReady) {
+          S.webReady = false;
+          btn.classList.remove('active');
+          document.querySelectorAll('[data-touch="swing"]').forEach((b) => b.classList.remove('active'));
+          if (S.moduleId) active().trySwing();
+        } else {
+          I.shoot = true;
+        }
+      }
       if (act === 'interact') {
         if (S.dialogueActive) skipDialogue();
         else if (S.moduleId) active().onInteract();
       }
-      if (act === 'swing') { I.swingHeld = true; if (S.moduleId) active().trySwing(); }
+      if (act === 'swing') {
+        // v19：丝键切换制——点一下预备（高亮），再点取消；预备状态不影响移动/跳跃
+        S.webReady = !S.webReady;
+        btn.classList.toggle('active', S.webReady);
+        ui.toast(S.webReady ? '丝线预备，点「网」发射' : '取消丝线预备', 800);
+      }
       if (act === 'dodge') I.dodge = true;
     };
-    const up = (e) => { e.preventDefault(); if (act === 'left') I.left = false; if (act === 'right') I.right = false; if (act === 'swing') { I.swingHeld = false; if (S.moduleId) active().releaseSwing(); } };
+    const up = (e) => { e.preventDefault(); if (act === 'left') I.left = false; if (act === 'right') I.right = false; if (act === 'forward') I.forward = false; if (act === 'back') I.back = false; if (act === 'swing') { /* 切换制：松手不做任何事 */ } };
     btn.addEventListener('pointerdown', down); btn.addEventListener('pointerup', up); btn.addEventListener('pointerleave', up);
   });
+  // v19：3D 触屏拖拽转视角（空白区域拖动；按钮区域已被 touch-btn 捕获，不冲突）
+  let dragStart = null;
+  const glCanvas = $('gl');
+  glCanvas.addEventListener('pointerdown', (e) => { dragStart = { x: e.clientX, y: e.clientY }; });
+  window.addEventListener('pointermove', (e) => {
+    if (!dragStart) return;
+    I.dx += (e.clientX - dragStart.x) * 0.55;
+    I.dy += (e.clientY - dragStart.y) * 0.55;
+    dragStart = { x: e.clientX, y: e.clientY };
+  });
+  window.addEventListener('pointerup', () => { dragStart = null; });
+  window.addEventListener('pointercancel', () => { dragStart = null; });
   ui.el.dialogueBubble.addEventListener('click', skipDialogue);
   document.getElementById('comic').addEventListener('click', finishComic);
   const creditsEl = document.getElementById('credits');

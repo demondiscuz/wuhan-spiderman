@@ -14,7 +14,7 @@ export function createUI() {
     btnAudio: $('btnAudio'), btnPause: $('btnPause'), btnFullscreen: $('btnFullscreen'), btnJournal: $('btnJournal'), btnHint: $('btnHint'),
     stage: $('stage16x9'), cutscene: $('cutscene'),
     chapterCard: $('chapterCard'), chapterKicker: $('chapterKicker'), chapterTitle: $('chapterTitle'), chapterSub: $('chapterSub'),
-    loadingOverlay: $('loadingOverlay'), loadingImg: $('loadingImg'), loadingFill: $('loadingFill'), loadingPct: $('loadingPct'),
+    loadingOverlay: $('loadingOverlay'), loadingImg: $('loadingImg'), loadingFill: $('loadingFill'), loadingPct: $('loadingPct'), loadingTip: $('loadingTip'),
     hintCard: $('hintCard'), hintTitle: $('hintTitle'), hintText: $('hintText'), hintClose: $('hintClose'), hintOk: $('hintOk'), hintRetry: $('hintRetry'),
     dialogueAvatar: $('dialogueAvatar'),
     enemyBar: $('enemyBar'), enemyName: $('enemyName'), enemyHpText: $('enemyHpText'), enemyFill: $('enemyFill'),
@@ -39,10 +39,12 @@ export function createUI() {
     el.chapterCard.classList.remove('hidden');
     clearTimeout(el._cardTimer); el._cardTimer = setTimeout(() => el.chapterCard.classList.add('hidden'), ms);
   }
-  /* 章节资源加载层：可带背景图（img 为完整 URL 或空） */
-  function showLoading({ img } = {}) {
+  /* 章节资源加载层：可带背景图（img 为完整 URL 或空）+ 顶部场景提示语（tip 为空时不显示） */
+  function showLoading({ img, tip } = {}) {
     if (img) { el.loadingImg.src = img; el.loadingImg.classList.remove('hidden'); }
     else el.loadingImg.classList.add('hidden');
+    if (tip) { el.loadingTip.textContent = tip; el.loadingTip.classList.remove('hidden'); }
+    else { el.loadingTip.textContent = ''; el.loadingTip.classList.add('hidden'); }
     el.loadingFill.style.width = '0%';
     el.loadingPct.textContent = '0%';
     el.loadingOverlay.classList.remove('hidden');

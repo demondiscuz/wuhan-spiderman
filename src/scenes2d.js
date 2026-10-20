@@ -30,13 +30,14 @@ function buildScene(id) {
         id, chapter: 'ch1', theme: 'pixel', pixel: true, bgm: 'bgm_fly', ambience: ['sfx_wind'],
         width: 4200, platforms, oneways: [], anchors: genAnchors(4200, 9, 360),
         goo: [], nodes: [], collectibles: [],
+        tutorial: true, // v19：三段新手教学（移动 → 跳跃 → 攻击）
         enemies: [
-          { x: 520, y: 770, w: 54, h: 50, hp: 1, alive: true, dir: -1, t: 0, harmless: false, minX: 20, maxX: 600 },
-          { x: 1900, y: 770, w: 54, h: 50, hp: 1, alive: true, dir: -1, t: 0, harmless: false, minX: 1600, maxX: 2180 }
+          { x: 520, y: 728, w: 54, h: 92, hp: 1, alive: true, dir: -1, t: 0, harmless: false, minX: 20, maxX: 600 },
+          { x: 1900, y: 728, w: 54, h: 92, hp: 1, alive: true, dir: -1, t: 0, harmless: false, minX: 1600, maxX: 2180, tutTarget: true }
         ],
         targets: [], goal: { x: 4000 },
         start: { x: 200, y: 670 }, carry: false,
-        objective: '飞向武汉最高楼·绿地中心', sub: '像素风 · 按住 E/右键摆荡',
+        objective: '新手教学（1/3）· 移动', sub: '按住 ◀ ▶ 向右移动',
         dialogue: [], video: null
       };
     },
@@ -154,8 +155,10 @@ export function create2D(hooks) {
     if (under) { player.y = under.y - player.h; player.grounded = true; }
     S.respawn = { x: scene.start.x, y: scene.start.y };
     S.web = 60; S.objectiveProgress = ''; S.dialogueEndCallback = null;
+    scene.heart = null; scene.heartCd = 0; // v19：爱心刷新区
     hooks.hideEnemyBar();
     hooks.setObjective(scene.objective, scene.sub, '');
+    if (scene.tutorial) { scene.tutStep = 0; } // v19：第一章教学状态机
     if (scene.id === 'G02') {
       // 先自由行动；碰到章鱼博士后触发两段对白 + 两张独立漫画；对话结束才开战
       scene.combatStarted = false; scene.introStarted = false;
@@ -355,6 +358,28 @@ export function create2D(hooks) {
     hooks.sayQueue(scene.dialogue.slice());
   }
 
+  /* v19：第一章三段教学（移动 → 跳跃 → 攻击），随玩家 x 推进 */
+  function updateTutorial() {
+    if (!scene.tutorial) return;
+    const cx = player.x + player.w / 2;
+    if (scene.tutStep === 0 && cx > 760) {
+      scene.tutStep = 1;
+      toast('跳！跨过楼顶间的缝隙', 1400);
+      hooks.setObjective('新手教学（2/3）· 跳跃', '按「跳」跳过楼顶缝隙', '');
+    } else if (scene.tutStep === 1 && cx > 1500) {
+      scene.tutStep = 2;
+      toast('用「网」发射蛛网弹！', 1400);
+      hooks.setObjective('新手教学（3/3）· 攻击', '点「网」发射蛛网弹击中黑色小怪', '');
+    } else if (scene.tutStep === 2) {
+      const t = enemies.find(e => e.tutTarget);
+      if (!t || !t.alive) {
+        scene.tutStep = 3;
+        toast('教学完成！向绿地中心进发！', 1800);
+        hooks.setObjective('飞向武汉最高楼·绿地中心', '像素风 · 按住 E/右键摆荡', '');
+      }
+    }
+  }
+
   function update(dt) {
     scene.t = (scene.t || 0) + dt;
     if (scene.walkOut) {
@@ -364,6 +389,7 @@ export function create2D(hooks) {
       if (scene.walkT > 6) { hooks.goTo('G04'); return; }
     }
     updatePlayer(dt);
+    if (scene.id === 'G01') updateTutorial(); // v19：第一章三段教学
     if (scene.id === 'G02') {
       if (!scene.combatStarted) {
         if (!scene.introStarted && Math.abs(player.x + player.w / 2 - 1600) < 220) startDocIntro();
@@ -374,9 +400,9 @@ export function create2D(hooks) {
     // 小兵
     for (const e of enemies) {
       if (!e.alive) continue;
-      e.t += dt; e.x += e.dir * (140 + Math.sin(e.t * 2) * 40) * dt;
+      e.t += dt; e.x += e.dir * (85 + Math.sin(e.t * 1.6) * 26) * dt; // v19：移动速度减慢约 40%
       if (e.x < (e.minX ?? 60) || e.x > (e.maxX ?? scene.width - 120)) e.dir *= -1;
-      if (!e.harmless && player.invuln <= 0 && dist(player.x + player.w / 2, player.y + player.h / 2, e.x + e.w / 2, e.y + e.h / 2) < 70) hurt(1);
+      if (!e.harmless && player.invuln <= 0 && dist(player.x + player.w / 2, player.y + player.h / 2, e.x + e.w / 2, e.y + e.h / 2) < 78) hurt(1);
     }
     // 蛛网弹
     shots = shots.filter(s => (s.life -= dt) > 0);
@@ -397,6 +423,24 @@ export function create2D(hooks) {
     }
     // 目标点
     const cx = player.x + player.w / 2, cy = player.y + player.h / 2;
+    // v19：爱心加血——血量 1~2 颗时持续随机刷爱心，拾取 +1 心并播放“噔噔噔”
+    scene.heartCd = Math.max(0, (scene.heartCd || 0) - dt);
+    if (S.hearts <= 2 && !scene.heart && scene.heartCd <= 0) {
+      const plats = scene.platforms.filter(p => Math.abs(p.x + p.w / 2 - cx) < 560);
+      if (plats.length) {
+        const p = plats[Math.floor(hash(scene.t + 31) * plats.length)];
+        scene.heart = { x: clamp(p.x + 60 + hash(scene.t + 17) * Math.max(20, p.w - 140), 0, scene.width - 44), y: p.y, t: 0 };
+      }
+    }
+    if (scene.heart) {
+      scene.heart.t += dt;
+      if (dist(cx, cy, scene.heart.x + 22, scene.heart.y - 20) < 64) {
+        S.hearts = Math.min(S.maxHearts, S.hearts + 1);
+        hooks.audio.sfx('sfx_heart');
+        toast('恢复 1 颗心！', 1000);
+        scene.heart = null; scene.heartCd = 1.4;
+      }
+    }
     if (scene.goal && cx >= scene.goal.x - 60) {
       if (scene.id === 'G01') { hooks.audio.sfx('sfx_spider_sense'); hooks.goTo('G02'); }
       else if (scene.id === 'G04') hooks.goTo('G05');
@@ -450,40 +494,47 @@ export function create2D(hooks) {
     if (player.swing) { px(x + 18, y - 100, 6, 6, red); }
   }
   function drawPixelDocOck(ox, oy, t = 0) {
-    // 背后 6 根持续摆动的机械臂 + 章鱼博士本体
+    // v19：4 根机械爪从身体背后伸出（海带式摆动），末端张开成机械爪花；新增圆形眼镜与灰白背头
     ctx.save();
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    for (let i = 0; i < 6; i++) {
-      const side = i < 3 ? -1 : 1;
-      const phase = t * 2.4 + i * 0.9;
-      let x = ox + side * 18, y = oy - 108;
-      const len = 42 + Math.sin(phase * 1.3) * 6;
-      ctx.strokeStyle = '#6b1f16'; ctx.lineWidth = 13;
+    for (let i = 0; i < 4; i++) {
+      const side = i < 2 ? -1 : 1;
+      const phase = t * 2.2 + i * 1.15;
+      let x = ox + side * 8, y = oy - 102;
+      const len = 26 + Math.sin(phase * 1.2) * 5;
+      ctx.strokeStyle = '#6b1f16'; ctx.lineWidth = 11;
       ctx.beginPath(); ctx.moveTo(x, y);
-      for (let seg = 0; seg < 3; seg++) {
-        const ang = side * (0.55 + seg * 0.42) + Math.sin(phase + seg * 0.9) * 0.34;
-        x += Math.cos(ang) * len;
-        y -= 18 + Math.sin(phase + seg * 1.2) * 5;
+      for (let seg = 0; seg < 4; seg++) {
+        const ang = side * (0.22 + seg * 0.34) - 0.75 + Math.sin(phase + seg * 0.9) * 0.32;
+        x += Math.cos(ang) * len * 0.95;
+        y -= 13 + Math.sin(phase + seg * 1.1) * 4.5;
         ctx.lineTo(x, y);
       }
       ctx.stroke();
-      ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 7;
+      ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 6;
       ctx.stroke();
-      // 爪子
-      for (let c = -1; c <= 1; c++) {
-        ctx.strokeStyle = '#d94a35'; ctx.lineWidth = 4;
-        ctx.beginPath(); ctx.moveTo(x, y);
-        ctx.lineTo(x + c * 12 + side * 10, y - 14 + Math.abs(c) * 5);
+      // 末端机械爪花：3~4 瓣张开（膨大）
+      const bx = x, by = y;
+      ctx.strokeStyle = '#d94a35'; ctx.lineWidth = 3.5;
+      for (let p = 0; p < 4; p++) {
+        const pa = Math.PI * 2 * (p / 4) + side * 0.45 + Math.sin(phase * 1.4) * 0.28;
+        ctx.beginPath(); ctx.moveTo(bx, by);
+        ctx.lineTo(bx + Math.cos(pa) * 14, by + Math.sin(pa) * 10);
         ctx.stroke();
       }
-      // 吸盘
-      for (let d = 0; d < 2; d++) px(x - 2 + d * 5, y + 8 + d * 6, 4, 4, '#2b0d0a');
     }
-    // 身体 / 头 / 红芯片
+    // 身体 / 头
     px(ox - 30, oy - 112, 60, 84, '#2c3d2c');
     px(ox - 24, oy - 102, 48, 42, '#3d5a3a');
     px(ox - 22, oy - 146, 44, 36, '#c9a27a');
-    px(ox - 14, oy - 136, 10, 10, '#111'); px(ox + 4, oy - 136, 10, 10, '#111');
+    // 灰白背头/发丝（头顶后部几束 + 顶部发片）
+    px(ox - 22, oy - 152, 44, 6, '#cfc8c0');
+    for (let h = 0; h < 4; h++) px(ox - 20 + h * 7, oy - 158 - (h % 2) * 3, 7, 9, '#cfc8c0');
+    px(ox - 26, oy - 148, 52, 4, '#cfc8c0');
+    // 圆形眼镜：双框 + 玻璃 + 镜桥
+    px(ox - 18, oy - 140, 15, 13, '#e8e0d0'); px(ox + 3, oy - 140, 15, 13, '#e8e0d0');
+    px(ox - 15, oy - 137, 9, 7, '#22222e'); px(ox + 6, oy - 137, 9, 7, '#22222e');
+    px(ox - 6, oy - 137, 12, 4, '#e8e0d0');
     px(ox - 6, oy - 120, 12, 6, '#8a2f22');
     px(ox - 8, oy - 106, 16, 8, '#ff3b2f');
     px(ox - 30, oy - 28, 60, 8, '#1a241a');
@@ -491,12 +542,18 @@ export function create2D(hooks) {
   }
   function drawPixelMonster(e) {
     const x = Math.round(e.x), y = Math.round(e.y);
-    px(x, y + 8, 54, 42, '#17111c');
-    px(x + 8, y, 38, 20, '#17111c');
-    px(x + 4, y + 38, 12, 12, '#0d0a10'); px(x + 38, y + 38, 12, 12, '#0d0a10');
-    px(x + 14, y + 16, 10, 14, '#f4f1e8'); px(x + 30, y + 16, 10, 14, '#f4f1e8');
-    px(x + 18, y + 20, 4, 6, '#c0392b'); px(x + 34, y + 20, 4, 6, '#c0392b');
-    px(x + 18, y + 36, 18, 4, '#3a1410');
+    // v19：蘑菇形小怪（体积变高）——圆顶帽 + 帽檐 + 柄身 + 白眼红瞳
+    px(x + 14, y - 8, 26, 10, '#17111c');
+    px(x + 6, y, 42, 16, '#17111c');
+    px(x, y + 14, 54, 24, '#17111c');
+    px(x - 2, y + 34, 58, 10, '#17111c');
+    px(x + 10, y + 42, 34, 46, '#17111c');
+    px(x + 6, y + 84, 42, 8, '#17111c');
+    px(x + 12, y + 48, 12, 17, '#f4f1e8'); px(x + 30, y + 48, 12, 17, '#f4f1e8');
+    px(x + 16, y + 52, 4, 8, '#c0392b'); px(x + 34, y + 52, 4, 8, '#c0392b');
+    px(x + 18, y + 72, 18, 4, '#3a1410');
+    // 帽上斑点
+    px(x + 12, y + 10, 6, 6, '#241d2c'); px(x + 34, y + 16, 6, 6, '#241d2c');
   }
   function renderPixel() {
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
@@ -559,22 +616,48 @@ export function create2D(hooks) {
     if (scene.id === 'G03') drawPixelDocOck(scene.docX || 950, 820, scene.t || 0);
     for (const p of projectiles) px(p.x - 16, p.y - 12, 32, 24, p.reflected ? '#ff8a3a' : '#d98a3a');
     for (const e of enemies) if (e.alive) drawPixelMonster(e);
-    // 白色蜘蛛丝
+    // v19：爱心（低血量持续刷新，浮动 + 白色高光）
+    if (scene.heart) {
+      const hx = Math.round(scene.heart.x + 22), hy = Math.round(scene.heart.y - 24 + Math.sin(scene.heart.t * 4) * 3);
+      px(hx - 12, hy - 6, 24, 18, '#c0392b');
+      px(hx - 8, hy - 12, 16, 10, '#c0392b');
+      px(hx - 4, hy - 16, 8, 6, '#c0392b');
+      px(hx - 10, hy - 8, 7, 8, '#ff8a92'); px(hx + 3, hy - 8, 7, 8, '#ff8a92');
+      px(hx - 12, hy + 10, 24, 4, '#3a1410');
+    }
+    // v19：第一章教学标记（黄箭头 + 文字提示）
+    if (scene.id === 'G01' && scene.tutorial) {
+      ctx.textAlign = 'center';
+      if (scene.tutStep === 0) {
+        const ax = 700, ay = 690;
+        ctx.strokeStyle = '#ffd68a'; ctx.lineWidth = 7; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(ax - 24, ay); ctx.lineTo(ax + 16, ay); ctx.lineTo(ax + 6, ay - 11); ctx.moveTo(ax + 16, ay); ctx.lineTo(ax + 6, ay + 11); ctx.stroke();
+        ctx.fillStyle = '#fff2d4'; ctx.font = '700 22px sans-serif'; ctx.fillText('向右移动 ▶', ax, ay - 30);
+      } else if (scene.tutStep === 1) {
+        const ax = 1280, ay = 650;
+        ctx.strokeStyle = '#ffd68a'; ctx.lineWidth = 7;
+        ctx.beginPath(); ctx.moveTo(ax, ay + 24); ctx.lineTo(ax, ay - 16); ctx.lineTo(ax - 11, ay - 6); ctx.moveTo(ax, ay - 16); ctx.lineTo(ax + 11, ay - 6); ctx.stroke();
+        ctx.fillStyle = '#fff2d4'; ctx.font = '700 22px sans-serif'; ctx.fillText('按「跳」跨过缝隙 ⤒', ax, ay + 46);
+      } else if (scene.tutStep === 2) {
+        const t = enemies.find(e => e.tutTarget);
+        if (t && t.alive) {
+          const ax = Math.round(t.x + 27), ay = Math.round(t.y - 20);
+          px(ax - 14, ay - 8, 28, 8, '#ffd68a'); px(ax - 4, ay - 14, 8, 8, '#ffd68a');
+          ctx.fillStyle = '#1d1a1c'; ctx.font = '700 20px sans-serif'; ctx.fillText('!', ax, ay - 3);
+          ctx.fillStyle = '#fff2d4'; ctx.font = '700 20px sans-serif'; ctx.fillText('点「网」射击', ax, ay + 26);
+        }
+      }
+    }
+    // 白色蜘蛛丝（v19：一根细白线，2px 虚线）
     if (player.swing) {
-      ctx.strokeStyle = 'rgba(255,255,250,0.95)';
-      ctx.lineWidth = 4;
-      ctx.setLineDash([14, 9]);
+      ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([12, 8]);
       ctx.beginPath();
       ctx.moveTo(player.x + player.w / 2, player.y + 44);
       ctx.lineTo(player.swing.a.x, player.swing.a.y);
       ctx.stroke();
       ctx.setLineDash([]);
-      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-      ctx.lineWidth = 8;
-      ctx.beginPath();
-      ctx.moveTo(player.x + player.w / 2, player.y + 44);
-      ctx.lineTo(player.swing.a.x, player.swing.a.y);
-      ctx.stroke();
     }
     drawPixelPlayer();
     for (const s of shots) px(s.x - 4, s.y - 4, 8, 8, '#f3f1e8');
@@ -609,7 +692,7 @@ export function create2D(hooks) {
     if (scene.id === 'G08') { const vx = scene.width - 340, vy = 700; ctx.fillStyle = '#17111c'; ctx.beginPath(); ctx.ellipse(vx, vy, 150, 170, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#f4f1e8'; ctx.beginPath(); ctx.ellipse(vx - 40, vy - 60, 26, 40, 0, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.ellipse(vx + 40, vy - 60, 26, 40, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#ffd98a'; ctx.font = '700 16px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('毒液 ' + scene.boss.webs + '/12', vx, vy - 180); }
     // 玩家
     const px = player.x + player.w / 2, py = player.y + player.h;
-    if (player.swing) { ctx.strokeStyle = 'rgba(240,240,220,0.9)'; ctx.lineWidth = 3; ctx.setLineDash([10, 6]); ctx.beginPath(); ctx.moveTo(px + player.facing * 10, py - 108); ctx.lineTo(player.swing.a.x, player.swing.a.y); ctx.stroke(); ctx.setLineDash([]); }
+    if (player.swing) { ctx.strokeStyle = 'rgba(240,240,220,0.9)'; ctx.lineWidth = 2; ctx.setLineDash([10, 6]); ctx.beginPath(); ctx.moveTo(px + player.facing * 10, py - 108); ctx.lineTo(player.swing.a.x, player.swing.a.y); ctx.stroke(); ctx.setLineDash([]); }
     ctx.save(); ctx.translate(px, py); ctx.scale(player.facing, 1);
     if (player.invuln > 0 && Math.floor(S.time * 12) % 2 === 0) ctx.globalAlpha = 0.45;
     const run = player.grounded && Math.abs(player.vx) > 20 ? Math.sin(player.anim * 14) : 0;

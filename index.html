@@ -159,6 +159,7 @@
     <div id="loadingOverlay" class="overlay hidden" aria-hidden="true">
       <img id="loadingImg" alt="" aria-hidden="true">
       <div class="loading-shade" aria-hidden="true"></div>
+      <div class="loading-tip-wrap"><div id="loadingTip"></div></div>
       <div class="loading-bar-wrap">
         <div class="loading-track"><div id="loadingFill"></div></div>
         <div id="loadingPct">0%</div>
@@ -182,6 +183,10 @@
       <div class="touch-left">
         <button data-touch="left" class="touch-btn">◀</button>
         <button data-touch="right" class="touch-btn">▶</button>
+      </div>
+      <div class="touch-nav" aria-hidden="true">
+        <button data-touch="back" class="touch-btn touch-small">后</button>
+        <button data-touch="forward" class="touch-btn touch-small">前</button>
       </div>
       <div class="touch-right">
         <button data-touch="jump" class="touch-btn touch-small">跳</button>

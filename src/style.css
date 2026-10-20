@@ -589,6 +589,12 @@ body {
   pointer-events: none;
 }
 .touch-left, .touch-right { display: flex; gap: 10px; align-items: flex-end; }
+/* 3D 专属：前/后移动键（默认隐藏，setMode('3d') 时由 JS 加上 .touch-nav-on 显示） */
+.touch-nav {
+  position: absolute; left: 18px; bottom: 88px;
+  display: none; gap: 8px;
+}
+#touchControls.touch-nav-on .touch-nav { display: flex; }
 .touch-btn {
   pointer-events: auto;
   width: 62px;
@@ -603,6 +609,12 @@ body {
   touch-action: none;
 }
 .touch-btn:active { background: rgba(184, 58, 46, 0.82); }
+.touch-btn.active {
+  background: rgba(255, 214, 138, 0.55);
+  border-color: #ffd68a;
+  color: #1d1a1c;
+  box-shadow: 0 0 14px rgba(255, 214, 138, 0.55);
+}
 .touch-small { width: 52px; height: 52px; font-size: 15px; }
 
 @media (pointer: coarse), (max-width: 900px) {
@@ -996,7 +1008,7 @@ body {
   .credits-track { width: 86%; }
 }
 
-/* v18 章节资源加载层（简约：背景图 + 细进度条 + 百分比） */
+/* v18 章节资源加载层（简约：背景图 + 细进度条 + 百分比；v19 增加顶部场景提示语） */
 #loadingOverlay { z-index: 18; background: #0b0805; }
 #loadingOverlay #loadingImg {
   position: absolute; inset: 0; width: 100%; height: 100%;
@@ -1005,6 +1017,16 @@ body {
 #loadingOverlay .loading-shade {
   position: absolute; inset: 0;
   background: linear-gradient(180deg, rgba(7,8,10,.16) 0%, rgba(7,8,10,.38) 60%, rgba(7,8,10,.8) 100%);
+}
+.loading-tip-wrap {
+  position: absolute; left: 50%; top: 16%; transform: translateX(-50%);
+  width: min(560px, 82%); text-align: center; pointer-events: none;
+}
+#loadingTip {
+  display: inline-block; max-width: 100%;
+  padding: 7px 16px; border-radius: 10px;
+  background: rgba(11, 8, 5, 0.42); border: 1px solid rgba(246, 238, 220, 0.18);
+  color: #f4e6cc; font-size: 14px; line-height: 1.6; letter-spacing: .04em;
 }
 .loading-bar-wrap {
   position: absolute; left: 50%; bottom: 13%; transform: translateX(-50%);

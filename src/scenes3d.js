@@ -28,6 +28,7 @@ export function create3D(hooks) {
     colliders = []; anchors = []; targets = []; projectiles = []; shots = []; boss = null;
     enemies = []; nodes = []; portal = null; venom = null; pedestrians = [];
     if (webLine) { scene.remove(webLine); webLine.geometry.dispose(); webLine.material.dispose(); webLine = null; }
+    if (mod && mod.heart) { scene.remove(mod.heart.m); mod.heart = null; }
     P.vel.set(0, 0, 0); P.swing = null; P.dodge = 0; P.dodgeCd = 0; P.invuln = 0; started = false;
   }
 
@@ -148,19 +149,65 @@ export function create3D(hooks) {
     const body = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 1.05, 2.3, 16), mat(0x2c3d2c)); body.position.y = 1.2;
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.62, 20, 16), mat(0xc9a27a)); head.position.y = 2.65;
     doc.add(body); doc.add(head);
-    const eyeMat = mat(0x111111, { emissive: 0x66ffcc, emissiveIntensity: 0.9 });
-    for (const ex of [-0.22, 0.22]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), eyeMat); e.position.set(ex, 2.7, 0.55); doc.add(e); }
+    // 圆形眼镜：外环 + 玻璃微光（v19 新增）
+    const glasses = new THREE.Group();
+    for (const gx of [-0.24, 0.24]) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.045, 10, 20), mat(0x222222));
+      ring.position.set(gx, 2.72, 0.52); ring.rotation.y = Math.PI / 2;
+      const glass = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 10), mat(0x66ccff, { emissive: 0x66ccff, emissiveIntensity: 0.5, transparent: true, opacity: 0.7 }));
+      glass.position.set(gx, 2.72, 0.52);
+      glasses.add(ring); glasses.add(glass);
+    }
+    const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.05, 0.07), mat(0x222222));
+    bridge.position.set(0, 2.72, 0.52); glasses.add(bridge);
+    doc.add(glasses);
+    // 灰白背头/发丝：头顶后部束起 + 两侧垂发（v19 新增）
+    const hair = new THREE.Group();
+    const hairMat = mat(0xcfc8c0);
+    for (let i = 0; i < 6; i++) {
+      const strand = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.52 - i * 0.05, 0.09), hairMat);
+      strand.position.set(-0.26 + i * 0.1, 2.98 + (i % 2) * 0.05, -0.3);
+      strand.rotation.x = 0.38 + (i % 3) * 0.14;
+      hair.add(strand);
+    }
+    for (const sx of [-0.52, 0.52]) {
+      const side = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.58, 0.12), hairMat);
+      side.position.set(sx, 2.6, -0.32); side.rotation.x = 0.5; side.rotation.z = sx * 0.35;
+      hair.add(side);
+    }
+    doc.add(hair);
+    // 红芯片
     const chip = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), mat(0x1a1a1a, { emissive: 0xff3b2f, emissiveIntensity: 1.2 }));
     chip.position.set(0, 2.2, 0.45); doc.add(chip);
+    // 4 根机械爪从身体背后伸出：海带式波浪摆动 + 末端张开成机械爪花（v19 重构）
+    const arms = [];
+    const armXs = [-0.72, -0.34, 0.34, 0.72];
     for (let i = 0; i < 4; i++) {
-      const ang = i * Math.PI / 2 + 0.4;
-      const bx = Math.cos(ang) * 0.9, bz = Math.sin(ang) * 0.9;
-      const s1 = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 2.6, 8), mat(0xa83228));
-      s1.position.set(bx, 1.3, bz); s1.rotation.z = Math.cos(ang) * 0.9; s1.rotation.x = Math.sin(ang) * 0.9; doc.add(s1);
-      const s2 = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.16, 2.2, 8), mat(0xc0392b));
-      s2.position.set(bx * 2.2, 2.2, bz * 2.2); s2.rotation.z = Math.cos(ang) * 1.25; s2.rotation.x = Math.sin(ang) * 1.25; doc.add(s2);
+      const g = new THREE.Group();
+      const s1 = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.2, 1.5, 8), mat(0xa83228));
+      s1.position.y = 0.75; s1.rotation.x = 0.5; g.add(s1);
+      const s2 = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 1.3, 8), mat(0xc0392b));
+      s2.position.set(0, 1.9, -0.2); s2.rotation.x = 0.95; g.add(s2);
+      const s3 = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.1, 1.0, 8), mat(0xd94a35));
+      s3.position.set(0, 3.05, -0.5); s3.rotation.x = 1.35; g.add(s3);
+      // 末端花瓣（4 瓣机械爪张开）
+      const petalMat = mat(0xe05a42);
+      for (let p = 0; p < 4; p++) {
+        const petal = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.42, 6), petalMat);
+        petal.position.set(0, 3.78, -0.64);
+        petal.rotation.x = 1.35 + Math.PI * (p % 2);
+        petal.rotation.z = (p - 1.5) * 0.28;
+        g.add(petal);
+      }
+      g.position.set(armXs[i], 1.3, -0.9);
+      g.rotation.y = (armXs[i] > 0 ? -1 : 1) * (0.25 + Math.abs(armXs[i]) * 0.5);
+      g.userData.baseRx = 0; g.userData.baseRz = 0; g.userData.phase = i * 1.3;
+      doc.add(g);
+      arms.push(g);
     }
-    doc.position.set(x, 0, z); group.add(doc); return doc;
+    doc.position.set(x, 0, z); group.add(doc);
+    doc.userData.arms = arms;
+    return doc;
   }
 
   function buildSkyDome(top, mid, bottom) {
@@ -271,6 +318,56 @@ export function create3D(hooks) {
     for (let z = -15; z <= 15; z += 3) { box(0.10, 1.1, 0.10, 0xb0a28e, -15, 0.55, z); box(0.10, 1.1, 0.10, 0xb0a28e, 15, 0.55, z); }
   }
 
+  /* v19：纽约天际线——帝国大厦（退台+尖顶天线）、自由女神像（绿色远景剪影）、街道霓虹灯 */
+  function buildNewYorkBackdrop() {
+    // 帝国大厦（远景左上方）：退台式楼体 + 尖顶天线 + 红色航标灯
+    const emp = new THREE.Group();
+    const tiers = [[9, 16, 0x39454c], [7.4, 13, 0x3d4d5a], [5.6, 10, 0x414f5e], [4, 7, 0x455464]];
+    let ey = 0;
+    for (const [w, h, c] of tiers) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), mat(c));
+      m.position.y = ey + h / 2; emp.add(m); ey += h;
+    }
+    const spike = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.5, 9, 8), mat(0x4a5a68));
+    spike.position.y = ey + 4.5; emp.add(spike);
+    const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.5, 10, 8), new THREE.MeshBasicMaterial({ color: 0xff5544, fog: false }));
+    beacon.position.y = ey + 9.2; emp.add(beacon);
+    emp.position.set(-58, 0, -168); group.add(emp);
+    // 帝国大厦窗灯
+    for (let i = 0; i < 14; i++) {
+      const win = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), new THREE.MeshBasicMaterial({ color: i % 3 ? 0xffd98a : 0x9ad0d8 }));
+      win.position.set(-58 + (i % 4) * 2 - 3, 4 + Math.floor(i / 4) * 5, -169.3); group.add(win);
+    }
+    // 自由女神像（远景右下方，绿色剪影清晰可辨：基座+裙身+身体+头冠+高举火炬）
+    const st = new THREE.Group();
+    const green = mat(0x5fa083, { emissive: 0x2f6a4f, emissiveIntensity: 0.4 });
+    const base = new THREE.Mesh(new THREE.BoxGeometry(3.6, 4.2, 3.6), mat(0x6a6a72)); base.position.y = 2.1; st.add(base);
+    const gown = new THREE.Mesh(new THREE.ConeGeometry(1.7, 4.2, 4), green); gown.position.y = 6.2; st.add(gown);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.15, 3.4, 1.15), green); body.position.y = 9.3; st.add(body);
+    const lArm = new THREE.Mesh(new THREE.BoxGeometry(0.4, 2.6, 0.4), green); lArm.position.set(0.85, 9.9, 0); lArm.rotation.z = -0.62; st.add(lArm);
+    const torch = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.6, 8), new THREE.MeshBasicMaterial({ color: 0xffb14a, fog: false }));
+    torch.position.set(1.92, 11.2, 0); st.add(torch);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 10), green); head.position.y = 11.5; st.add(head);
+    for (let c = -1; c <= 1; c++) {
+      const cr = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.5, 6), green);
+      cr.position.set(c * 0.18, 11.9, 0); cr.rotation.z = c * 0.22; st.add(cr);
+    }
+    st.position.set(62, 0, -240); group.add(st);
+    // 街道霓虹灯招牌（两侧彩色发光牌 + 光点）
+    mod.neonSigns = [];
+    const neonCols = [0xff3b5c, 0x3be8ff, 0xffd23b, 0x9bff5a, 0xff7ae0];
+    for (let i = 0; i < 7; i++) {
+      const side = i % 2 ? 1 : -1;
+      const pole = new THREE.Mesh(new THREE.BoxGeometry(0.22, 3.6, 0.22), mat(0x2a2a2e));
+      pole.position.set(side * 5.8, 1.8, -18 - i * 14); group.add(pole);
+      const sign = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.7, 0.14), new THREE.MeshBasicMaterial({ color: neonCols[i % neonCols.length] }));
+      sign.position.set(side * 5.8, 3.9, -18 - i * 14); group.add(sign);
+      const glow = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 6), new THREE.MeshBasicMaterial({ color: neonCols[i % neonCols.length], transparent: true, opacity: 0.55 }));
+      glow.position.set(side * 5.8, 3.9, -18 - i * 14); group.add(glow);
+      mod.neonSigns.push(sign);
+    }
+  }
+
   function buildPedestrians(count, xAbs, zMin, zMax) {
     const shirts = [0x5a6f8a, 0x8a5a4a, 0x4a6a5a, 0x7a6a9a, 0x9a6a4a];
     for (let i = 0; i < count; i++) {
@@ -333,7 +430,7 @@ export function create3D(hooks) {
       buildEnv('dawn', { rows: [{ x: 0, z: 0, w: 30, h: 40, d: 40, color: 0x8f8778 }], anchors: [{ x: 0, y: 8, z: 0 }] });
       buildWuhanBackdrop();
       buildRooftop();
-      buildDocOck(0, -10);
+      const doc = buildDocOck(0, -10); mod.docArms = doc.userData.arms;
       boss = { hp: 0, phase: 1, timer: 0, throwTimer: 1.5, bound: 0 };
       P.pos.set(0, 0, 12); P.yaw = 0; respawn.set(0, 0, 12);
       hooks.setObjective('反击章鱼博士（0/3）', '闪避工具箱，或左键蛛网弹把它甩回去', '');
@@ -347,7 +444,7 @@ export function create3D(hooks) {
       buildEnv('dawn', { rows: [{ x: 0, z: 0, w: 30, h: 40, d: 40, color: 0x8f8778 }] });
       buildWuhanBackdrop();
       buildRooftop();
-      buildDocOck(0, -10);
+      const doc = buildDocOck(0, -10); mod.docArms = doc.userData.arms;
       targets.push({ x: 0, z: -6, r: 2, hit: false, mesh: sphere(0.7, 0xffd68a, 0, 1.4, -6) });
       P.pos.set(0, 0, 8); P.yaw = 0; respawn.set(0, 0, 8);
       hooks.setObjective('与奥托博士握手言和', '靠近博士并按 F', '');
@@ -394,6 +491,7 @@ export function create3D(hooks) {
       buildEnv('night', { rows, anchors: an });
       buildGrassField(-2);
       for (let i = 0; i < 24; i++) { const sx = i % 2 ? -40 - (i % 4) * 12 : 40 + (i % 4) * 12; box(14, 40 + (i * 7) % 40, 14, 0x39454c, sx, 22, -20 - i * 6); }
+      buildNewYorkBackdrop(); // v19：帝国大厦远景 + 自由女神像 + 街道霓虹灯
       buildPedestrians(6, 6.0, -10, -120);
       buildStreetLamps(6.4, -16, -130);
       buildStreetFurniture(5.6, -20, -112);
@@ -551,7 +649,68 @@ export function create3D(hooks) {
     }
   }
 
+  /* v19：爱心加血——血量 1~2 颗时持续随机刷爱心（3D），拾取 +1 心并播放“噔噔噔” */
+  let heartTex = null;
+  function heartSpriteTexture() {
+    if (heartTex) return heartTex;
+    const c = document.createElement('canvas'); c.width = 128; c.height = 128;
+    const g = c.getContext('2d');
+    g.fillStyle = '#e74c5c';
+    g.beginPath();
+    g.moveTo(64, 112);
+    g.bezierCurveTo(6, 60, 24, 10, 64, 44);
+    g.bezierCurveTo(104, 10, 122, 60, 64, 112);
+    g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.85)';
+    g.beginPath(); g.ellipse(42, 40, 10, 7, -0.6, 0, Math.PI * 2); g.fill();
+    heartTex = new THREE.CanvasTexture(c); heartTex.colorSpace = THREE.SRGBColorSpace;
+    return heartTex;
+  }
+  function updateHeart3D(dt) {
+    mod.heartCd = (mod.heartCd || 0) - dt;
+    if (S.hearts > 2) {
+      if (mod.heart) { scene.remove(mod.heart.m); mod.heart = null; }
+      return;
+    }
+    if (!mod.heart && mod.heartCd <= 0) {
+      const ang = Math.random() * Math.PI * 2;
+      const dd = 2.5 + Math.random() * 4;
+      const hx = clamp(P.pos.x + Math.cos(ang) * dd, -8, 8);
+      const hz = clamp(P.pos.z + Math.sin(ang) * dd - 2, -16, 6);
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: heartSpriteTexture(), transparent: true, depthWrite: false }));
+      sp.scale.set(1.15, 1.15, 1); sp.position.set(hx, 1.0, hz);
+      scene.add(sp); mod.heart = { m: sp, t: 0 };
+    }
+    if (mod.heart) {
+      mod.heart.t += dt;
+      mod.heart.m.position.y = 1.0 + Math.sin(mod.heart.t * 2.6) * 0.24;
+      mod.heart.m.material.rotation = Math.sin(mod.heart.t * 1.6) * 0.2;
+      if (P.pos.distanceTo(mod.heart.m.position) < 1.7) {
+        S.hearts = Math.min(S.maxHearts, S.hearts + 1);
+        audio.sfx('sfx_heart');
+        toast('恢复 1 颗心！', 1000);
+        scene.remove(mod.heart.m); mod.heart = null; mod.heartCd = 1.6;
+      }
+    }
+  }
+
   function update(dt) {
+    mod.t = (mod.t || 0) + dt;
+    // v19：章鱼博士四根机械爪海带式摆动（背后伸出，波浪起伏）
+    if (mod.docArms) for (const arm of mod.docArms) {
+      arm.rotation.x = arm.userData.baseRx + Math.sin(mod.t * 2.1 + arm.userData.phase) * 0.24;
+      arm.rotation.z = arm.userData.baseRz + Math.cos(mod.t * 1.7 + arm.userData.phase * 1.2) * 0.16;
+    }
+    // v19：纽约霓虹灯招牌变色闪烁
+    if (mod.neonSigns && mod.neonSigns.length) {
+      const cycle = Math.floor(mod.t / 1.1);
+      if (cycle !== mod._neonCycle) {
+        mod._neonCycle = cycle;
+        const cols = [0xff3b5c, 0x3be8ff, 0xffd23b, 0x9bff5a, 0xff7ae0];
+        mod.neonSigns.forEach((s, i) => { s.material.color.setHex(cols[(i + cycle) % cols.length]); });
+      }
+    }
+    updateHeart3D(dt);
     move3D(dt);
     for (const p of pedestrians) {
       p.change -= dt;
