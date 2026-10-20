@@ -1,5 +1,5 @@
 /* 自动音视频卡位引擎（音频侧）
- * 按文件名槽位懒加载 audio/*.ogg|m4a，缺失自动容错。
+ * 按文件名槽位懒加载 audio/*.ogg，缺失自动容错。
  */
 export function createAudio(debug = false) {
   const a = {
@@ -25,8 +25,7 @@ export function createAudio(debug = false) {
   function ensure(name) {
     if (a.buffers.has(name)) return Promise.resolve(a.buffers.get(name));
     if (a.pending.has(name)) return a.pending.get(name);
-    const prefersOgg = !!(new Audio().canPlayType('audio/ogg; codecs="opus"'));
-    const exts = prefersOgg ? ['ogg', 'm4a'] : ['m4a', 'ogg'];
+    const exts = ['ogg'];
     const p = (async () => {
       if (!a.ctx) await init();
       for (const ext of exts) {

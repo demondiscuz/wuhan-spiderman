@@ -52,10 +52,10 @@ const LOCATIONS = {
 };
 const AVATARS = { '蜘蛛侠': '🕷', '章鱼博士': '🐙', '钢铁侠': '🤖', '毒液': '👾', '毒液与小兵': '👾', '孙悟空': '🐒' };
 const COMICS = {
-  v1: 'comics/v1.jpg',
-  v2: 'comics/v2.jpg',
-  v3: 'comics/v3.jpg',
-  v4: 'comics/v4.jpg'
+  v1: 'comics/v1.webp',
+  v2: 'comics/v2.webp',
+  v3: 'comics/v3.webp',
+  v4: 'comics/v4.webp'
 };
 
 /* v13：平面二维卡通双手（手背 / 手心两张 SVG） */
@@ -444,5 +444,5 @@ const TEST_COMIC = params.get('comic');
 if (TEST_COMIC) {
   ui.el.startOverlay.classList.add('hidden');
   S.state = 'playing';
-  showComic(COMICS[TEST_COMIC] || 'comics/wukong.jpg', 0, () => {});
+  showComic(COMICS[TEST_COMIC] || 'comics/wukong.webp', 0, () => {});
 }

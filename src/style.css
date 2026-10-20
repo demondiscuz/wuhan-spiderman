@@ -909,7 +909,7 @@ body {
 .credit-sub { font-size: 12px; color: #d9b08a; margin: 2px 0 10px; letter-spacing: .04em; }
 
 /* ================= v17 mobile / tablet ================= */
-@media (pointer: coarse), (max-width: 1280px) {
+@media (pointer: coarse), (max-width: 1100px) {
   #topBar { padding: 6px 8px 0; min-height: 54px; }
   .dayline { font-size: 11px; }
   .weather { font-size: 8px; }
@@ -985,7 +985,7 @@ body {
 @keyframes rotateHint { 0%,100% { transform: rotate(0); } 50% { transform: rotate(90deg); } }
 
 /* v17 mobile refinements */
-@media (pointer: coarse), (max-width: 1280px) {
+@media (pointer: coarse), (max-width: 1100px) {
   #comic.comic { width: min(28%, 250px); }
   #dialogueBubble.dialogue-bubble { max-height: 31%; scrollbar-width: none; }
   #dialogueBubble.dialogue-bubble::-webkit-scrollbar { display: none; }
