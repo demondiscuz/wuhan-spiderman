@@ -45,8 +45,8 @@ function buildScene(id) {
       start: { x: 240, y: 670 }, carry: false,
       objective: '反击章鱼博士（0/3）', sub: '闪避工具箱，或左键蛛网弹把它甩回去',
       dialogue: [
-        { speaker: '蜘蛛侠', text: '嘿！奥托博士！这可是武汉最高楼，绿地中心，你用四根机械爪拆护栏可不太礼貌！', voice: 'vo_d01', lock: true, comic: 'comics/docock.jpg' },
-        { speaker: '章鱼博士', text: '走开，蜘蛛侠！我来光谷参加量子科学展，但刚才机械臂的主控芯片被一滴奇怪的黑水侵蚀了，我控制不住它们——小心！', voice: 'vo_d02', lock: true, comic: 'comics/docock2.jpg' }
+        { speaker: '蜘蛛侠', text: '嘿！奥托博士！这可是武汉最高楼，绿地中心，你用四根机械爪拆护栏可不太礼貌！', voice: 'vo_d01', lock: true, comic: 'comics/docock.webp' },
+        { speaker: '章鱼博士', text: '走开，蜘蛛侠！我来光谷参加量子科学展，但刚才机械臂的主控芯片被一滴奇怪的黑水侵蚀了，我控制不住它们——小心！', voice: 'vo_d02', lock: true, comic: 'comics/docock2.webp' }
       ],
       video: null, boss: { hp: 0, max: 3, phase: 1, timer: 0, throwTimer: 1.8, bound: 0, maxBound: 4 }
     }),
@@ -56,7 +56,7 @@ function buildScene(id) {
       enemies: [], targets: [{ x: 950, y: 640, r: 60, hit: false, label: 'F 击掌' }], goal: null,
       start: { x: 300, y: 670 }, carry: false, docX: 950, walkOut: false, walkT: 0,
       objective: '与奥托博士握手言和', sub: '听完对白，靠近博士按 F',
-      dialogue: [{ speaker: '章鱼博士', text: '太感谢你了，孩子！要不是你的蛛丝够结实，我差点在武汉闯下大祸。不打不相识，从今天起，你就是我奥托最好的朋友！', voice: 'vo_d03', lock: true, comic: 'comics/chip_pull.jpg' }],
+      dialogue: [{ speaker: '章鱼博士', text: '太感谢你了，孩子！要不是你的蛛丝够结实，我差点在武汉闯下大祸。不打不相识，从今天起，你就是我奥托最好的朋友！', voice: 'vo_d03', lock: true, comic: 'comics/chip_pull.webp' }],
       video: null
     }),
     G04: () => {
@@ -130,7 +130,7 @@ export function create2D(hooks) {
   const pixelBg = new Image();
   let pixelBgReady = false;
   pixelBg.onload = () => { pixelBgReady = true; };
-  pixelBg.src = `${import.meta.env.BASE_URL}comics/ch1_pixel_bg.jpg`;
+  pixelBg.src = `${import.meta.env.BASE_URL}comics/ch1_pixel_bg.webp`;
   const player = { x: 200, y: 670, w: 58, h: 150, vx: 0, vy: 0, grounded: false, coyote: 0, jumpBuffer: 0, facing: 1, anim: 0, swing: null, swingCd: 0, dodge: 0, dodgeCd: 0, invuln: 0, carry: false };
   let enemies = [], targets = [], shots = [], projectiles = [], particles = [], shake = 0;
 
@@ -307,7 +307,7 @@ export function create2D(hooks) {
   }
   function onHandshake2D() {
     hooks.audio.sfx('sfx_mech');
-    hooks.sayQueue([{ speaker: '蜘蛛侠', text: '一言为定，拐子！我现在就带你去楼下吃完热干面！', voice: 'vo_d04', lock: true, comic: 'comics/handshake.jpg' }]);
+    hooks.sayQueue([{ speaker: '蜘蛛侠', text: '一言为定，拐子！我现在就带你去楼下吃完热干面！', voice: 'vo_d04', lock: true, comic: 'comics/handshake.webp' }]);
     // D04 语音结束后，两人一起向右走出画面
     S.dialogueEndCallback = () => {
       scene.walkOut = true; scene.walkT = 0; S.lockInput = 9999;

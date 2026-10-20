@@ -375,7 +375,7 @@ export function create3D(hooks) {
       P.pos.set(0, 0, -2); P.yaw = 0; respawn.set(0, 0, -2);
       hooks.setObjective('追踪黑色粘液', '沿黑液痕迹前往龟山电视塔', '');
       hooks.audio.bgm('bgm_normal'); hooks.audio.ambience(['sfx_wind', 'sfx_goo']);
-      hooks.sayQueue([{ speaker: '蜘蛛侠', text: '咦？这就是刚才让博士机械臂失控的东西？它在往那边爬！', voice: 'vo_d05', lock: false, comic: 'comics/track.jpg' }]);
+      hooks.sayQueue([{ speaker: '蜘蛛侠', text: '咦？这就是刚才让博士机械臂失控的东西？它在往那边爬！', voice: 'vo_d05', lock: false, comic: 'comics/track.webp' }]);
     }
     else if (id === 'G05') {
       buildEnv('dusk', { rows: [{ x: 0, z: 0, w: 30, h: 40, d: 30, color: 0x6a5a4c }] });
@@ -449,7 +449,7 @@ export function create3D(hooks) {
       P.pos.set(0, 0, -2); P.yaw = 0; respawn.set(0, 0, -2);
       hooks.setObjective('背埃迪回家', '沿街道向前走', '');
       hooks.audio.bgm('bgm_normal'); hooks.audio.ambience(['sfx_ambient_ny']);
-      hooks.sayQueue([{ speaker: '蜘蛛侠', text: '埃迪？！怎么会是你！', voice: 'vo_d10', lock: true, comic: 'comics/eddie.jpg' }]);
+      hooks.sayQueue([{ speaker: '蜘蛛侠', text: '埃迪？！怎么会是你！', voice: 'vo_d10', lock: true, comic: 'comics/eddie.webp' }]);
     }
     else if (id === 'G10') {
       buildEnv('dusk', { rows: [{ x: 0, z: 0, w: 30, h: 40, d: 30, color: 0x6a5a4c }] });
@@ -620,7 +620,7 @@ export function create3D(hooks) {
         hooks.sayQueue([{
           speaker: '钢铁侠',
           text: '退后，小蜘蛛！神盾局一检测到跨国传送门和共生体反应就通知我了，剩下的交给我！',
-          voice: 'vo_d07', lock: true, comic: 'comics/v2.jpg'
+          voice: 'vo_d07', lock: true, comic: 'comics/v2.webp'
         }]);
         S.dialogueEndCallback = () => setTimeout(() => hooks.goTo('G08'), 1200);
       }
@@ -693,7 +693,7 @@ export function create3D(hooks) {
       text: '哇哦！这金橙色的火花圈……不是奇异博士才会画的魔法传送门吗？怎么会出现在龟山电视塔？不管了，黑色液体钻进去了，我得跟过去看看！',
       voice: null, lock: false, duration: 14000
     }]);
-    hooks.showComic('comics/v1.jpg', 14000, () => {
+    hooks.showComic('comics/v1.webp', 14000, () => {
       S.lockInput = 0; S.paused = false; S.dialogueActive = false;
       hooks.goTo('G06');
     });
@@ -715,7 +715,7 @@ export function create3D(hooks) {
     hooks.playVideo('v4', () => {
       // 与 v4 连续衔接：不再等待，立刻切换到悟空全屏分镜
       hooks.audio.vo('vo_d11');
-      hooks.showComic('comics/wukong.jpg', 8000, () => hooks.end(), { full: true });
+      hooks.showComic('comics/wukong.webp', 8000, () => hooks.end(), { full: true });
     });
   }
 
