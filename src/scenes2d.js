@@ -2,6 +2,8 @@
  * 与 3D 章共享 hooks（audio/视频/对白/状态/推进）。
  */
 const W = 1920, H = 1080;
+const TILE = 64; // 2D 关卡统一网格
+const snap = (v) => Math.round(v / TILE) * TILE; // 坐标吸附到格点
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const approach = (v, t, s) => v < t ? Math.min(v + s, t) : Math.max(v - s, t);
 const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
@@ -116,6 +118,8 @@ function buildScene(id) {
   const s = ch2[id]();
   s.targets = s.targets || [];
   s.enemies = s.enemies || [];
+  // 锚点网格化：所有 2D 关卡锚点统一吸附到 64px 格点，摆荡锚点始终落在格子上
+  if (s.anchors) s.anchors = s.anchors.map(a => ({ x: snap(a.x), y: snap(a.y) }));
   return s;
 }
 

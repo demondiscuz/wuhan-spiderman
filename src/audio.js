@@ -25,7 +25,7 @@ export function createAudio(debug = false) {
   function ensure(name) {
     if (a.buffers.has(name)) return Promise.resolve(a.buffers.get(name));
     if (a.pending.has(name)) return a.pending.get(name);
-    const exts = ['ogg'];
+    const exts = ['ogg', 'm4a']; // Ogg 优先；Safari/iPadOS 老版本不支持 Ogg 时自动回退 m4a
     const p = (async () => {
       if (!a.ctx) await init();
       for (const ext of exts) {
