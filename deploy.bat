@@ -19,4 +19,4 @@ if not errorlevel 1 (
 )
 
 echo [OK] 自检通过（dist 为构建产物），开始部署到 Cloudflare Pages...
-npx wrangler pages deploy dist --project-name=wuhanspiderman --branch=main
+npx -y wrangler pages deploy dist --project-name=wuhanspiderman --branch=main
