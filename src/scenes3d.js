@@ -16,6 +16,8 @@ export function create3D(hooks) {
   };
   let colliders = [], anchors = [], targets = [], projectiles = [], boss = null, shots = [];
   let enemies = [], nodes = [], portal = null, venom = null;
+  let interactMeshes = []; // v27：可直接点击触发的交互对象（传送门 / 工作台等）
+  const raycaster = new THREE.Raycaster();
   let pedestrians = [];
   let webLine = null;
   let respawn = new THREE.Vector3(), started = false;
@@ -27,6 +29,7 @@ export function create3D(hooks) {
     group = new THREE.Group(); scene.add(group);
     colliders = []; anchors = []; targets = []; projectiles = []; shots = []; boss = null;
     enemies = []; nodes = []; portal = null; venom = null; pedestrians = [];
+    interactMeshes = [];
     if (webLine) { scene.remove(webLine); webLine.geometry.dispose(); webLine.material.dispose(); webLine = null; }
     if (mod && mod.heart) { scene.remove(mod.heart.m); mod.heart = null; }
     if (mod && mod.webPack) { scene.remove(mod.webPack.m); mod.webPack = null; }
@@ -260,7 +263,8 @@ export function create3D(hooks) {
   }
 
   function buildWorkbench(x, z) {
-    box(3.6, 0.14, 1.6, 0x6a4a2a, x, 1.08, z);
+    const top = box(3.6, 0.14, 1.6, 0x6a4a2a, x, 1.08, z);
+    top.userData.interact = true; interactMeshes.push(top); // v27：点击工作台桌面即可触发整理战衣
     for (const lx of [-1.5, 1.5]) for (const lz of [-0.55, 0.55]) box(0.12, 1.0, 0.12, 0x3a2a1a, x + lx, 0.5, z + lz);
     // 战衣支架 + 战衣
     box(0.12, 2.0, 0.12, 0x555555, x - 1.1, 1.0, z - 0.2);
@@ -494,6 +498,7 @@ export function create3D(hooks) {
       buildWuhanPanorama();
       const torus = new THREE.Mesh(new THREE.TorusGeometry(2.2, 0.18, 10, 32), new THREE.MeshBasicMaterial({ color: 0xffb14a, fog: false }));
       torus.position.set(0, 2.4, -12); group.add(torus); portal = torus;
+      torus.userData.interact = true; interactMeshes.push(torus); // v27：点击传送门实体也可触发
       const disc = new THREE.Mesh(new THREE.CircleGeometry(2.1, 32), new THREE.MeshBasicMaterial({ color: 0xff7a2a, transparent: true, opacity: 0.22, side: THREE.DoubleSide, fog: false }));
       disc.position.set(0, 2.4, -12); group.add(disc);
       P.pos.set(0, 0, 10); P.yaw = 0; respawn.set(0, 0, 10);
@@ -949,10 +954,10 @@ export function create3D(hooks) {
 
   function onInteract() {
     if (S.dialogueActive) { hooks.skipDialogue(); return; }
-    if (mod.id === 'G05' && portal && P.pos.distanceTo(portal.position) < 4) { triggerPortal(); return; }
-    if (mod.id === 'G02' && boss && boss.phase === 3 && P.pos.distanceTo(new THREE.Vector3(0, 0, -10)) < 4) removeChip();
-    else if (mod.id === 'G03') { const t = targets[0]; if (t && !t.hit && P.pos.distanceTo(new THREE.Vector3(t.x, 0, t.z)) < 4) { t.hit = true; scene.remove(t.mesh); onHandshake(); } }
-    else if (mod.id === 'G10') { if (P.pos.distanceTo(new THREE.Vector3(0, 0, -6)) < 6.5) repairSuitStep(); }
+    if (mod.id === 'G05' && portal) { triggerPortal(); return; }
+    if (mod.id === 'G02' && boss && boss.phase === 3) removeChip();
+    else if (mod.id === 'G03') { const t = targets[0]; if (t && !t.hit) { t.hit = true; if (t.mesh) scene.remove(t.mesh); onHandshake(); } }
+    else if (mod.id === 'G10') repairSuitStep();
   }
 
   function getHint() {
@@ -976,5 +981,14 @@ export function create3D(hooks) {
     return { title: '提示', text: '按提示继续推进剧情。' };
   }
 
-  return { enter, update, onInteract, trySwing, releaseSwing, shootWeb, getHint };
+  // v27：3D 实体点击——点传送门 / 工作台等交互对象，直接触发对应剧情（无需对准十字、无需站极近）
+  function clickPick3D(nx, ny) {
+    if (!mod || S.dialogueActive || S.comicActive || interactMeshes.length === 0) return;
+    const ndc = new THREE.Vector2(nx * 2 - 1, -(ny * 2 - 1));
+    raycaster.setFromCamera(ndc, camera);
+    const hits = raycaster.intersectObjects(interactMeshes, true);
+    if (hits.length > 0) onInteract();
+  }
+
+  return { enter, update, onInteract, clickPick3D, trySwing, releaseSwing, shootWeb, getHint };
 }

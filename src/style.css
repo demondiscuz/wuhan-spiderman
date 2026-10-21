@@ -938,6 +938,8 @@ body {
   color: #f6eedc; font-size: 14px; letter-spacing: .03em;
   box-shadow: 0 8px 24px rgba(0,0,0,.4);
   cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent;
+  /* v27：父级 #touchControls 是 pointer-events:none，卡片必须显式 auto，否则收不到任何点击（点卡片无效的根因） */
+  pointer-events: auto;
 }
 #interactPrompt.hidden { display: none; }
 #interactPrompt .interact-key {

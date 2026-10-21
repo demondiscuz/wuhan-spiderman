@@ -551,6 +551,15 @@ function bindInput() {
     const ny = (e.clientY - r.top) / Math.max(1, r.height);
     scenes2d.clickPick(nx, ny);
   });
+  // v27：3D 画面直接点击交互实体（传送门 / 工作台等）触发剧情；摇杆与按钮在上层已捕获，此处只收到空白区点击，命中交互对象才触发
+  const glPick = $('gl');
+  if (glPick) glPick.addEventListener('pointerup', (e) => {
+    if (S.mode !== '3d' || !S.moduleId || S.dialogueActive || S.comicActive) return;
+    const r = glPick.getBoundingClientRect();
+    const nx = (e.clientX - r.left) / Math.max(1, r.width);
+    const ny = (e.clientY - r.top) / Math.max(1, r.height);
+    scenes3d.clickPick3D(nx, ny);
+  });
   // v20：游戏画面比例自适应终端（不固定 16:9）——画布跟随视口，2D 居中缩放、3D 全屏适配
   function fitStage() {
     const stage = ui.el.stage;
