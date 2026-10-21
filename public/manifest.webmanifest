@@ -2,15 +2,15 @@
   "name": "蜘蛛侠：江城奇旅",
   "short_name": "江城奇旅",
   "description": "和蜘蛛侠一起在武汉与纽约之间展开冒险",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "https://wuhanspiderman.pages.dev/",
+  "scope": "https://wuhanspiderman.pages.dev/",
   "display": "fullscreen",
   "orientation": "landscape",
   "background_color": "#1b1712",
   "theme_color": "#1b1712",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "https://wuhanspiderman.pages.dev/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "https://wuhanspiderman.pages.dev/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "https://wuhanspiderman.pages.dev/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }
