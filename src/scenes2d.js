@@ -32,8 +32,8 @@ function buildScene(id) {
         goo: [], nodes: [], collectibles: [],
         tutorial: true, // v19：三段新手教学（移动 → 跳跃 → 攻击）
         enemies: [
-          { x: 520, y: 728, w: 54, h: 92, hp: 1, alive: true, dir: -1, t: 0, harmless: false, minX: 20, maxX: 600 },
-          { x: 1900, y: 728, w: 54, h: 92, hp: 1, alive: true, dir: -1, t: 0, harmless: false, minX: 1600, maxX: 2180, tutTarget: true }
+          { x: 520, y: 728, w: 54, h: 92, hp: 1, alive: true, dir: -1, t: 0, harmless: true, minX: 300, maxX: 600 },
+          { x: 1900, y: 728, w: 54, h: 92, hp: 1, alive: true, dir: -1, t: 0, harmless: true, minX: 1600, maxX: 2180, tutTarget: true }
         ],
         targets: [], goal: { x: 4000 },
         start: { x: 200, y: 670 }, carry: false,
@@ -369,6 +369,8 @@ export function create2D(hooks) {
       hooks.setObjective('新手教学（2/3）· 跳跃', '按「跳」跳过楼顶缝隙', '');
     } else if (scene.tutStep === 1 && cx > 1500) {
       scene.tutStep = 2;
+      // v21：进入攻击教学才激活小怪（此前静止 harmless，玩家阅读/移动/跳跃时不会被打）
+      enemies.forEach(e => { e.harmless = false; });
       toast('用「网」发射蛛网弹！', 1400);
       hooks.setObjective('新手教学（3/3）· 攻击', '点「网」发射蛛网弹击中黑色小怪', '');
     } else if (scene.tutStep === 2) {
@@ -401,8 +403,11 @@ export function create2D(hooks) {
     // 小兵
     for (const e of enemies) {
       if (!e.alive) continue;
-      e.t += dt; e.x += e.dir * (85 + Math.sin(e.t * 1.6) * 26) * dt; // v19：移动速度减慢约 40%
-      if (e.x < (e.minX ?? 60) || e.x > (e.maxX ?? scene.width - 120)) e.dir *= -1;
+      // v21：教学阶段 harmless 的小怪静止不动，玩家完成移动/跳跃教学后才激活
+      if (!e.harmless) {
+        e.t += dt; e.x += e.dir * (85 + Math.sin(e.t * 1.6) * 26) * dt; // v19：移动速度减慢约 40%
+        if (e.x < (e.minX ?? 60) || e.x > (e.maxX ?? scene.width - 120)) e.dir *= -1;
+      }
       // v20：蘑菇怪贴地——跟随下方平台顶面移动，不再穿模/悬空
       const underP = scene.platforms.find(p => e.x + e.w / 2 > p.x && e.x + e.w / 2 < p.x + p.w);
       if (underP) e.y = underP.y - e.h;
