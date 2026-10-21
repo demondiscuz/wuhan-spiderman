@@ -14,9 +14,9 @@ function roundRectPath(c, x, y, w, h, r) {
   c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
 }
 
-function genRoofs(width, { startY = 810, segW = 640, gap = 160 } = {}) {
+function genRoofs(width, { startY = 810, segW = 640, gap = 160, flat = false } = {}) {
   const a = []; let x = 0;
-  while (x < width - 200) { const y = startY - Math.round(hash(x) * 60); a.push({ x, y, w: segW, h: H - y }); x += segW + gap; }
+  while (x < width - 200) { const y = flat ? startY : startY - Math.round(hash(x) * 60); a.push({ x, y, w: segW, h: H - y }); x += segW + gap; }
   return a;
 }
 function genAnchors(width, n, y) { const a = []; for (let i = 0; i < n; i++) a.push({ x: Math.round(300 + i * (width - 600) / Math.max(1, n - 1)), y }); return a; }
@@ -25,7 +25,7 @@ function genGoo(width, plats, n) { const a = []; for (let i = 0; i < n; i++) { c
 function buildScene(id) {
   const ch2 = {
     G01: () => {
-      const platforms = genRoofs(4200, { startY: 820, segW: 620, gap: 170 });
+      const platforms = genRoofs(4200, { startY: 820, segW: 620, gap: 170, flat: true });
       return {
         id, chapter: 'ch1', theme: 'pixel', pixel: true, bgm: 'bgm_fly', ambience: ['sfx_wind'],
         width: 4200, platforms, oneways: [], anchors: genAnchors(4200, 9, 360),
@@ -156,6 +156,7 @@ export function create2D(hooks) {
     S.respawn = { x: scene.start.x, y: scene.start.y };
     S.web = 60; S.objectiveProgress = ''; S.dialogueEndCallback = null;
     scene.heart = null; scene.heartCd = 0; // v19：爱心刷新区
+    scene.webPack = null; scene.webPackCd = 0; // v22：蛛网液补充包刷新区
     hooks.hideEnemyBar();
     hooks.setObjective(scene.objective, scene.sub, '');
     if (scene.tutorial) { scene.tutStep = 0; } // v19：第一章教学状态机
@@ -369,8 +370,8 @@ export function create2D(hooks) {
       hooks.setObjective('新手教学（2/3）· 跳跃', '按「跳」跳过楼顶缝隙', '');
     } else if (scene.tutStep === 1 && cx > 1500) {
       scene.tutStep = 2;
-      // v21：进入攻击教学才激活小怪（此前静止 harmless，玩家阅读/移动/跳跃时不会被打）
-      enemies.forEach(e => { e.harmless = false; });
+      // v22：只激活教学目标小怪（tutTarget），装饰小怪始终 harmless，不挡玩家跳缝隙路线
+      enemies.forEach(e => { if (e.tutTarget) e.harmless = false; });
       toast('用「网」发射蛛网弹！', 1400);
       hooks.setObjective('新手教学（3/3）· 攻击', '点「网」发射蛛网弹击中黑色小怪', '');
     } else if (scene.tutStep === 2) {
@@ -403,8 +404,8 @@ export function create2D(hooks) {
     // 小兵
     for (const e of enemies) {
       if (!e.alive) continue;
-      // v21：教学阶段 harmless 的小怪静止不动，玩家完成移动/跳跃教学后才激活
-      if (!e.harmless) {
+      // v21：教学阶段 harmless 的小怪静止不动；tutTarget 教学目标激活后也固定位置不巡逻（只等玩家射击），其余小怪正常移动
+      if (!e.harmless && !e.tutTarget) {
         e.t += dt; e.x += e.dir * (85 + Math.sin(e.t * 1.6) * 26) * dt; // v19：移动速度减慢约 40%
         if (e.x < (e.minX ?? 60) || e.x > (e.maxX ?? scene.width - 120)) e.dir *= -1;
       }
@@ -448,6 +449,24 @@ export function create2D(hooks) {
         hooks.audio.sfx('sfx_heart');
         toast('恢复 1 颗心！', 1000);
         scene.heart = null; scene.heartCd = 1.4;
+      }
+    }
+    // v22：蛛网液不足 10 时随机掉落补充包，拾取 +30（机制同爱心）
+    scene.webPackCd = Math.max(0, (scene.webPackCd || 0) - dt);
+    if (S.web < 10 && !scene.webPack && scene.webPackCd <= 0) {
+      const plats = scene.platforms.filter(p => Math.abs(p.x + p.w / 2 - cx) < 560);
+      if (plats.length) {
+        const p = plats[Math.floor(hash(scene.t + 71) * plats.length)];
+        scene.webPack = { x: clamp(p.x + 60 + hash(scene.t + 57) * Math.max(20, p.w - 140), 0, scene.width - 44), y: p.y, t: 0 };
+      }
+    }
+    if (scene.webPack) {
+      scene.webPack.t += dt;
+      if (dist(cx, cy, scene.webPack.x + 22, scene.webPack.y - 20) < 64) {
+        S.web = Math.min(S.webMax, S.web + 30);
+        hooks.audio.sfx('sfx_misc');
+        toast('蛛网液 +30！', 1000);
+        scene.webPack = null; scene.webPackCd = 1.4;
       }
     }
     if (scene.goal && cx >= scene.goal.x - 60) {
@@ -521,79 +540,139 @@ export function create2D(hooks) {
     if (player.swing) { px(x + 18, y - 100, 6, 6, redL); px(x + 21, y - 98, 2, 2, '#fff2d4'); }
   }
   function drawPixelDocOck(ox, oy, t = 0) {
-    // v20：2D 像素精细度提升——4 根机械爪（背后伸出、海带式摆动、末端机械爪花）、圆形眼镜、灰白背头、细节层次
+    // v22：按参考图——白色实验服、棕色短发、圆形黑墨镜；4 根红色大弧形机械臂（分段管、关节发光圆盘、末端三爪），缓慢波浪摆动
     ctx.save();
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    for (let i = 0; i < 4; i++) {
-      const side = i < 2 ? -1 : 1;
-      const phase = t * 2.2 + i * 1.15;
-      let x = ox + side * 8, y = oy - 102;
-      const len = 26 + Math.sin(phase * 1.2) * 5;
-      // 机械爪主臂（暗红底 + 亮色高光，关节感）
-      ctx.strokeStyle = '#4a120c'; ctx.lineWidth = 12;
-      ctx.beginPath(); ctx.moveTo(x, y);
-      for (let seg = 0; seg < 4; seg++) {
-        const ang = side * (0.22 + seg * 0.34) - 0.75 + Math.sin(phase + seg * 0.9) * 0.32;
-        x += Math.cos(ang) * len * 0.95;
-        y -= 13 + Math.sin(phase + seg * 1.1) * 4.5;
-        ctx.lineTo(x, y);
+
+    // 三次贝塞尔曲线采样为折线点
+    function cubicPts(p0, p1, p2, p3, n) {
+      const out = [];
+      for (let k = 0; k <= n; k++) {
+        const u = k / n, u2 = u * u, u3 = u2 * u;
+        const mt = 1 - u;
+        out.push({
+          x: mt * mt * mt * p0.x + 3 * mt * mt * u * p1.x + 3 * mt * u2 * p2.x + u3 * p3.x,
+          y: mt * mt * mt * p0.y + 3 * mt * mt * u * p1.y + 3 * mt * u2 * p2.y + u3 * p3.y
+        });
       }
-      ctx.stroke();
-      ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 7;
-      ctx.stroke();
-      // 关节连接件（每节之间金属方块）
-      for (let seg = 0; seg < 3; seg++) {
-        const jx = x - Math.cos(side * 0.4 + seg) * (len * 0.9 * (3 - seg));
-        const jy = y + 8 + seg * 6 + Math.sin(phase + seg) * 3;
-        px(Math.round(jx) - 3, Math.round(jy) - 3, 6, 6, '#8a2f22');
-        px(Math.round(jx) - 1, Math.round(jy) - 1, 2, 2, '#e8a06a');
-      }
-      // 末端机械爪花：4 片花瓣 + 中心发光点（膨大如盛开的花）
-      const bx = x, by = y;
-      ctx.strokeStyle = '#d94a35'; ctx.lineWidth = 3.5;
-      for (let p = 0; p < 4; p++) {
-        const pa = Math.PI * 2 * (p / 4) + side * 0.45 + Math.sin(phase * 1.4) * 0.28;
-        ctx.beginPath(); ctx.moveTo(bx, by);
-        ctx.lineTo(bx + Math.cos(pa) * 14, by + Math.sin(pa) * 10);
+      return out;
+    }
+    // 红色分段管机械臂
+    function drawArm(pts) {
+      const stroke = (w, c) => {
+        ctx.strokeStyle = c; ctx.lineWidth = w;
+        ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+        for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k].x, pts[k].y);
+        ctx.stroke();
+      };
+      stroke(17, '#4a0e14');    // 暗红底
+      stroke(13, '#c0302b');    // 红主体
+      stroke(5, '#e85a4a');     // 亮红高光
+      // 分段环纹（黑色环）
+      ctx.strokeStyle = '#4a0e14'; ctx.lineWidth = 3;
+      for (let k = 1; k < pts.length - 1; k += 2) {
+        const a = pts[k], b = pts[k + 1] || a;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const L = Math.hypot(dx, dy) || 1;
+        const nx = -dy / L, ny = dx / L;
+        ctx.beginPath();
+        ctx.moveTo(a.x - nx * 7, a.y - ny * 7);
+        ctx.lineTo(a.x + nx * 7, a.y + ny * 7);
         ctx.stroke();
       }
-      px(Math.round(bx) - 3, Math.round(by) - 3, 6, 6, '#ffd68a');
-      px(Math.round(bx) - 1, Math.round(by) - 1, 2, 2, '#fff2d4');
     }
-    // 身体：深绿外套 + 层次
-    px(ox - 30, oy - 112, 60, 84, '#223024');
-    px(ox - 28, oy - 112, 56, 6, '#3d5a3a');
-    px(ox - 24, oy - 102, 48, 42, '#3d5a3a');
-    px(ox - 24, oy - 102, 10, 42, '#4a6e47');
-    // 胸前金色机械面板 + 芯片核心
-    px(ox - 14, oy - 84, 28, 18, '#c9a050');
-    px(ox - 10, oy - 80, 8, 10, '#8a2f22');
-    px(ox + 2, oy - 79, 5, 4, '#fff2d4');
-    // 腹部深色 + 机械带
-    px(ox - 26, oy - 60, 52, 14, '#1a241a');
-    px(ox - 26, oy - 58, 52, 4, '#4a3a2c');
+    // 关节发光圆盘
+    function joint(x, y) {
+      ctx.fillStyle = '#7a1a1a';
+      ctx.beginPath(); ctx.arc(x, y, 10, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#e84a3a';
+      ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fff4e0';
+      ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI * 2); ctx.fill();
+    }
+    // 末端三爪（张开的机械指）
+    function clawTip(x, y, side, phase) {
+      const open = 0.55 + Math.sin(phase) * 0.1;
+      for (const a of [-open, 0, open]) {
+        const ex = x + side * Math.cos(a) * 13;
+        const ey = y + Math.sin(a) * 13;
+        ctx.strokeStyle = '#4a0e14'; ctx.lineWidth = 6;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.stroke();
+        ctx.strokeStyle = '#d84030'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.stroke();
+      }
+    }
+
+    // 4 根机械臂：0/1 为上爪（头顶两侧大弧），2/3 为下爪（身体侧下弯出）
+    for (let i = 0; i < 4; i++) {
+      const side = i < 2 ? -1 : 1;
+      const isUp = i === 0 || i === 1;
+      const phase = t * 1.0 + i * 1.6;
+      const sw = Math.sin(phase) * 6, cw = Math.cos(phase * 0.9) * 6;
+      let pts;
+      if (isUp) {
+        pts = cubicPts(
+          { x: ox + side * 6, y: oy - 88 },
+          { x: ox + side * 66 + sw * 0.6, y: oy - 118 },
+          { x: ox + side * 52 + sw * 0.8, y: oy - 205 },
+          { x: ox + side * 92 + sw, y: oy - 185 + cw },
+          12);
+      } else {
+        pts = cubicPts(
+          { x: ox + side * 6, y: oy - 80 },
+          { x: ox + side * 60 + sw * 0.5, y: oy - 50 },
+          { x: ox + side * 78 + sw * 0.7, y: oy + 18 },
+          { x: ox + side * 100 + sw, y: oy - 20 + cw },
+          12);
+      }
+      drawArm(pts);
+      // 关节圆盘：弧中段
+      const jp = pts[Math.floor(pts.length * 0.55)];
+      joint(jp.x, jp.y);
+      // 末端三爪
+      const tp = pts[pts.length - 1];
+      clawTip(tp.x, tp.y, side, phase);
+    }
+
+    // 背部红色机械基座（身体两侧露出，与爪相连）
+    px(ox - 30, oy - 100, 6, 22, '#a82820');
+    px(ox + 24, oy - 100, 6, 22, '#a82820');
+    px(ox - 26, oy - 100, 52, 14, '#8a2020');
+    // 身体：白色实验服
+    px(ox - 30, oy - 112, 60, 84, '#e6e6e2');
+    px(ox - 30, oy - 112, 4, 84, '#b8b8b4');   // 外套左阴影
+    px(ox + 26, oy - 112, 4, 84, '#f4f4f0');   // 右侧高光
+    // 黑色内搭（外套敞开）
+    px(ox - 10, oy - 102, 20, 64, '#26262e');
+    // 白色翻领
+    px(ox - 28, oy - 110, 13, 42, '#f4f4f0');
+    px(ox + 15, oy - 110, 13, 42, '#f4f4f0');
+    px(ox - 28, oy - 110, 3, 42, '#c8c8c4');
+    px(ox + 25, oy - 110, 3, 42, '#c8c8c4');
+    // 腰带
+    px(ox - 30, oy - 42, 60, 8, '#3a3a30');
+    px(ox - 4, oy - 40, 8, 4, '#c9a050');
     // 头：肤色 + 后脑阴影
     px(ox - 22, oy - 146, 44, 36, '#c9a27a');
     px(ox - 22, oy - 146, 44, 5, '#e0bd92');
     px(ox - 26, oy - 128, 6, 16, '#b08a62');
-    // 灰白背头/发丝（多束 + 顶部发片）
-    px(ox - 22, oy - 152, 44, 6, '#cfc8c0');
-    for (let h = 0; h < 4; h++) px(ox - 20 + h * 7, oy - 158 - (h % 2) * 3, 7, 9, '#cfc8c0');
-    px(ox - 26, oy - 148, 52, 4, '#cfc8c0');
-    // 圆形眼镜：大框 + 镜片反光 + 镜桥
-    px(ox - 18, oy - 140, 15, 13, '#e8e0d0'); px(ox + 3, oy - 140, 15, 13, '#e8e0d0');
-    px(ox - 15, oy - 137, 9, 7, '#22222e'); px(ox + 6, oy - 137, 9, 7, '#22222e');
-    px(ox - 12, oy - 135, 2, 3, '#ffffff'); px(ox + 9, oy - 135, 2, 3, '#ffffff');
-    px(ox - 6, oy - 137, 12, 4, '#e8e0d0');
+    // 棕色短发
+    px(ox - 22, oy - 152, 44, 9, '#4a2c1a');
+    px(ox - 24, oy - 146, 6, 12, '#4a2c1a');
+    px(ox + 18, oy - 146, 6, 12, '#4a2c1a');
+    px(ox - 16, oy - 150, 10, 5, '#5e3a24');
+    px(ox + 6, oy - 150, 10, 5, '#5e3a24');
+    // 圆形黑墨镜（细金属框 + 反光 + 镜桥）
+    px(ox - 17, oy - 139, 16, 14, '#96969e'); px(ox + 1, oy - 139, 16, 14, '#96969e');
+    px(ox - 15, oy - 137, 12, 10, '#1a1a24'); px(ox + 3, oy - 137, 12, 10, '#1a1a24');
+    px(ox - 12, oy - 134, 3, 3, '#ffffff'); px(ox + 6, oy - 134, 3, 3, '#ffffff');
+    px(ox - 1, oy - 136, 2, 8, '#96969e');
     // 嘴线 + 下巴
     px(ox - 8, oy - 126, 16, 2, '#8a5a3a');
-    // 机械背甲（手臂根部）
-    px(ox - 22, oy - 108, 44, 10, '#8a2f22');
-    px(ox - 22, oy - 108, 44, 3, '#d94a35');
-    px(ox - 30, oy - 28, 60, 8, '#1a241a');
-    // 腿：深色裤 + 鞋
-    px(ox - 26, oy - 24, 20, 24, '#2a3a2a');
-    px(ox + 6, oy - 24, 20, 24, '#2a3a2a');
+    px(ox - 30, oy - 28, 60, 6, '#d8d8d4');    // 外套下摆
+    // 腿：黑裤 + 深色鞋
+    px(ox - 24, oy - 24, 18, 24, '#2a2a30');
+    px(ox + 6, oy - 24, 18, 24, '#2a2a30');
     px(ox - 26, oy - 2, 20, 6, '#1a1410'); px(ox + 6, oy - 2, 20, 6, '#1a1410');
     ctx.restore();
   }
@@ -693,6 +772,18 @@ export function create2D(hooks) {
       px(hx - 4, hy - 16, 8, 6, '#c0392b');
       px(hx - 10, hy - 8, 7, 8, '#ff8a92'); px(hx + 3, hy - 8, 7, 8, '#ff8a92');
       px(hx - 12, hy + 10, 24, 4, '#3a1410');
+    }
+    // v22：蛛网液补充包（蓝色液罐 + 金属盖 + 白色蛛网标识）
+    if (scene.webPack) {
+      const wx = Math.round(scene.webPack.x + 22), wy = Math.round(scene.webPack.y - 22 + Math.sin(scene.webPack.t * 4) * 3);
+      px(wx - 11, wy - 8, 22, 22, '#2f6f8f');          // 罐体
+      px(wx - 9, wy - 6, 8, 9, '#7ac0e0');              // 玻璃高光
+      px(wx - 8, wy - 14, 16, 7, '#96969e');            // 金属盖
+      px(wx - 5, wy - 16, 10, 3, '#d8d8e0');            // 盖顶
+      px(wx - 6, wy - 2, 12, 10, '#e8f2f6');            // 白色标签
+      px(wx - 4, wy - 1, 2, 2, '#2f6f8f'); px(wx + 2, wy - 1, 2, 2, '#2f6f8f');
+      px(wx - 3, wy + 3, 6, 2, '#2f6f8f');
+      px(wx - 11, wy + 12, 22, 4, '#16323f');           // 阴影
     }
     // v19：第一章教学标记（黄箭头 + 文字提示）
     // v20：显眼化——半透明背景卡片 + 粗描边文字 + 发光箭头（与「点击交互」提示同等醒目）

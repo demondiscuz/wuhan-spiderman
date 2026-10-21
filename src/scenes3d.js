@@ -29,6 +29,7 @@ export function create3D(hooks) {
     enemies = []; nodes = []; portal = null; venom = null; pedestrians = [];
     if (webLine) { scene.remove(webLine); webLine.geometry.dispose(); webLine.material.dispose(); webLine = null; }
     if (mod && mod.heart) { scene.remove(mod.heart.m); mod.heart = null; }
+    if (mod && mod.webPack) { scene.remove(mod.webPack.m); mod.webPack = null; }
     P.vel.set(0, 0, 0); P.swing = null; P.dodge = 0; P.dodgeCd = 0; P.invuln = 0; started = false;
   }
 
@@ -708,6 +709,59 @@ export function create3D(hooks) {
     }
   }
 
+  // v22：蛛网液补充包（蓝色液罐 sprite，拾取 +30，机制同爱心）
+  let webPackTex = null;
+  function webPackSpriteTexture() {
+    if (webPackTex) return webPackTex;
+    const c = document.createElement('canvas'); c.width = 128; c.height = 128;
+    const g = c.getContext('2d');
+    // 罐体
+    g.fillStyle = '#2f6f8f';
+    g.beginPath(); g.roundRect(30, 42, 68, 66, 10); g.fill();
+    g.fillStyle = '#7ac0e0';
+    g.beginPath(); g.roundRect(36, 48, 20, 28, 6); g.fill();
+    // 金属盖
+    g.fillStyle = '#96969e';
+    g.beginPath(); g.roundRect(38, 30, 52, 16, 4); g.fill();
+    g.fillStyle = '#d8d8e0';
+    g.fillRect(44, 24, 40, 8);
+    // 白色标签 + 蛛网点
+    g.fillStyle = '#e8f2f6';
+    g.beginPath(); g.roundRect(44, 62, 40, 34, 5); g.fill();
+    g.fillStyle = '#2f6f8f';
+    g.fillRect(50, 68, 8, 8); g.fillRect(70, 68, 8, 8);
+    g.fillRect(54, 82, 20, 6);
+    webPackTex = new THREE.CanvasTexture(c); webPackTex.colorSpace = THREE.SRGBColorSpace;
+    return webPackTex;
+  }
+  function updateWebPack3D(dt) {
+    mod.webPackCd = (mod.webPackCd || 0) - dt;
+    if (S.web >= 10) {
+      if (mod.webPack) { scene.remove(mod.webPack.m); mod.webPack = null; }
+      return;
+    }
+    if (!mod.webPack && mod.webPackCd <= 0) {
+      const ang = Math.random() * Math.PI * 2;
+      const dd = 2.5 + Math.random() * 4;
+      const wx = clamp(P.pos.x + Math.cos(ang) * dd, -8, 8);
+      const wz = clamp(P.pos.z + Math.sin(ang) * dd - 2, -16, 6);
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: webPackSpriteTexture(), transparent: true, depthWrite: false }));
+      sp.scale.set(1.1, 1.1, 1); sp.position.set(wx, 1.0, wz);
+      scene.add(sp); mod.webPack = { m: sp, t: 0 };
+    }
+    if (mod.webPack) {
+      mod.webPack.t += dt;
+      mod.webPack.m.position.y = 1.0 + Math.sin(mod.webPack.t * 2.6) * 0.24;
+      mod.webPack.m.material.rotation = Math.sin(mod.webPack.t * 1.6) * 0.2;
+      if (P.pos.distanceTo(mod.webPack.m.position) < 1.7) {
+        S.web = Math.min(S.webMax, S.web + 30);
+        audio.sfx('sfx_misc');
+        toast('蛛网液 +30！', 1000);
+        scene.remove(mod.webPack.m); mod.webPack = null; mod.webPackCd = 1.6;
+      }
+    }
+  }
+
   function update(dt) {
     mod.t = (mod.t || 0) + dt;
     // v19：章鱼博士四根机械爪海带式摆动（背后伸出，波浪起伏）
@@ -725,6 +779,7 @@ export function create3D(hooks) {
       }
     }
     updateHeart3D(dt);
+    updateWebPack3D(dt);
     move3D(dt);
     for (const p of pedestrians) {
       p.change -= dt;
