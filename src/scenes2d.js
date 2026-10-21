@@ -191,7 +191,7 @@ export function create2D(hooks) {
   function shootWeb() {
     if (S.web <= 0) { toast('蛛网液不足', 1200, true); return; }
     S.web--;
-    shots.push({ x: player.x + player.w / 2, y: player.y + 46, vx: player.facing * 1400, vy: 0, life: 0.9 });
+    shots.push({ x: player.x + player.w / 2, y: player.y + 96, vx: player.facing * 1400, vy: 0, life: 0.9 });
     hooks.audio.sfx('sfx_swing', 0.6);
   }
   function hurt(n) {
