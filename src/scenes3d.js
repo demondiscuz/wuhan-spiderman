@@ -891,7 +891,7 @@ export function create3D(hooks) {
     // F 交互提示（抖动）
     if (S.dialogueActive || S.comicActive) hooks.hidePrompt();
     else if (mod.id === 'G05' && portal && P.pos.distanceTo(portal.position) < 4.2) hooks.setPrompt('穿过魔法传送门');
-    else if (mod.id === 'G10' && P.pos.distanceTo(new THREE.Vector3(0, 0, -6)) < 4.5) hooks.setPrompt('整理战衣');
+    else if (mod.id === 'G10' && P.pos.distanceTo(new THREE.Vector3(0, 0, -6)) < 6.5) hooks.setPrompt('整理战衣');
     else hooks.hidePrompt();
   }
 
@@ -952,7 +952,7 @@ export function create3D(hooks) {
     if (mod.id === 'G05' && portal && P.pos.distanceTo(portal.position) < 4) { triggerPortal(); return; }
     if (mod.id === 'G02' && boss && boss.phase === 3 && P.pos.distanceTo(new THREE.Vector3(0, 0, -10)) < 4) removeChip();
     else if (mod.id === 'G03') { const t = targets[0]; if (t && !t.hit && P.pos.distanceTo(new THREE.Vector3(t.x, 0, t.z)) < 4) { t.hit = true; scene.remove(t.mesh); onHandshake(); } }
-    else if (mod.id === 'G10') { if (P.pos.distanceTo(new THREE.Vector3(0, 0, -6)) < 4.5) repairSuitStep(); }
+    else if (mod.id === 'G10') { if (P.pos.distanceTo(new THREE.Vector3(0, 0, -6)) < 6.5) repairSuitStep(); }
   }
 
   function getHint() {

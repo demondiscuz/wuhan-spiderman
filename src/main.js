@@ -528,11 +528,20 @@ function bindInput() {
     window.addEventListener('pointercancel', joyUp);
   }
   // v20：交互提示卡片直接点击触发交互（替代手机端 F 键；点人物/目标同样触发）
+  // v26：同时用 pointerup（iOS 触摸更可靠），450ms 内防重复，避免一次点击推进两个整理阶段
   const ip = ui.el.interactPrompt;
-  if (ip) ip.addEventListener('click', () => {
-    if (S.dialogueActive) skipDialogue();
-    else if (S.moduleId) active().onInteract();
-  });
+  if (ip) {
+    let lastTap = 0;
+    const doTap = () => {
+      const now = performance.now();
+      if (now - lastTap < 450) return;
+      lastTap = now;
+      if (S.dialogueActive) skipDialogue();
+      else if (S.moduleId) active().onInteract();
+    };
+    ip.addEventListener('pointerup', (e) => { e.preventDefault(); doTap(); });
+    ip.addEventListener('click', doTap);
+  }
   // v20：2D 画面中直接点击交互对象（章鱼博士 / 握手目标 / 传送门）触发交互
   const flatCanvas = $('flat');
   if (flatCanvas) flatCanvas.addEventListener('click', (e) => {
