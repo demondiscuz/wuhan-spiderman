@@ -545,8 +545,10 @@ function bindInput() {
   // v20：游戏画面比例自适应终端（不固定 16:9）——画布跟随视口，2D 居中缩放、3D 全屏适配
   function fitStage() {
     const stage = ui.el.stage;
-    const w = Math.max(1, stage.clientWidth || window.innerWidth);
-    const h = Math.max(1, stage.clientHeight || window.innerHeight);
+    // v25：优先用 visualViewport / innerWidth，避免 iOS PWA 横屏启动时 dvh 半高错误
+    const vv = window.visualViewport;
+    const w = Math.max(1, Math.round((vv ? vv.width : 0) || window.innerWidth || stage.clientWidth));
+    const h = Math.max(1, Math.round((vv ? vv.height : 0) || window.innerHeight || stage.clientHeight));
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const gl = $('gl'), flat = $('flat');
     if (gl) { gl.width = Math.round(w * dpr); gl.height = Math.round(h * dpr); }
@@ -557,6 +559,10 @@ function bindInput() {
     camera.updateProjectionMatrix();
   }
   window.addEventListener('resize', fitStage);
+  window.addEventListener('orientationchange', () => setTimeout(fitStage, 120));
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', fitStage);
+  // v25：iOS PWA 启动后 viewport 可能延迟修正，分多次重新适配，修正半高 canvas
+  [120, 350, 700, 1200, 2000].forEach((ms) => setTimeout(fitStage, ms));
   fitStage();
   // v19：3D 触屏拖拽转视角（空白区域拖动；按钮区域已被 touch-btn 捕获，不冲突）
   let dragStart = null;
