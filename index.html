@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#1b1712">
-  <title>蜘蛛侠：至暗之日</title>
+  <title>蜘蛛侠：江城奇旅</title>
   <script type="module" src="/src/main.js"></script>
   <link rel="stylesheet" href="/src/style.css">
 </head>
 <body>
-  <main id="stage16x9" aria-label="蜘蛛侠：至暗之日">
+  <main id="stage16x9" aria-label="蜘蛛侠：江城奇旅">
     <canvas id="gl" width="1920" height="1080"></canvas>
     <canvas id="flat" width="1920" height="1080"></canvas>
     <video id="cutscene" playsinline webkit-playsinline></video>
@@ -90,10 +90,10 @@
         <div id="locationLabel">01 G01</div>
       </div>
 
-      <div id="hintBar" class="hint-bar">WASD 移动 · 鼠标 视角 · Space 跳跃 · E/右键 摆荡 · 左键 蛛网弹 · Shift 闪避 · F 交互 · H 提示</div>
-      <div id="interactPrompt" class="hidden" aria-live="polite">
-        <span class="interact-key">F</span>
-        <span id="interactText">按 F 交互</span>
+      <div id="hintBar" class="hint-bar">WASD 移动 · 鼠标 视角 · Space 跳跃 · E/右键 摆荡 · 左键 蛛网弹 · Shift 闪避 · 点击提示/人物 交互 · H 提示</div>
+      <div id="interactPrompt" class="hidden" aria-live="polite" role="button" tabindex="0">
+        <span class="interact-key">👆</span>
+        <span id="interactText">点击交互</span>
       </div>
       <div id="toast" class="toast hidden" role="status"></div>
       <div id="fps" class="fps hidden">60</div>
@@ -101,12 +101,12 @@
 
     <div id="startOverlay" class="overlay start-overlay">
       <picture class="start-boot">
-        <img src="./boot.webp" alt="蜘蛛侠：至暗之日 启动画面">
+        <img src="./boot.webp" alt="蜘蛛侠：江城奇旅 启动画面">
       </picture>
       <div class="start-shade" aria-hidden="true"></div>
       <div class="start-content">
         <div class="start-bottom">
-          <h1 class="start-title">蜘蛛侠：至暗之日</h1>
+          <h1 class="start-title">蜘蛛侠：江城奇旅</h1>
           <button id="startBtn" class="start-btn">开始游戏</button>
         </div>
       </div>
@@ -184,16 +184,13 @@
         <button data-touch="left" class="touch-btn">◀</button>
         <button data-touch="right" class="touch-btn">▶</button>
       </div>
-      <div class="touch-nav" aria-hidden="true">
-        <button data-touch="back" class="touch-btn touch-small">后</button>
-        <button data-touch="forward" class="touch-btn touch-small">前</button>
+      <div id="joystick" class="joystick" aria-hidden="true">
+        <div class="joystick-base"><div class="joystick-knob"></div></div>
       </div>
       <div class="touch-right">
         <button data-touch="jump" class="touch-btn touch-small">跳</button>
-        <button data-touch="shoot" class="touch-btn">网</button>
         <button data-touch="swing" class="touch-btn">丝</button>
-        <button data-touch="dodge" class="touch-btn touch-small">闪</button>
-        <button data-touch="interact" class="touch-btn touch-small">F</button>
+        <button data-touch="shoot" class="touch-btn">射</button>
       </div>
     </div>
   </main>

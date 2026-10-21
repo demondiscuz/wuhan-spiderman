@@ -58,7 +58,7 @@ function buildScene(id) {
       width: 1900, platforms: [{ x: 0, y: 820, w: 1900, h: 260 }], oneways: [], anchors: [], goo: [], nodes: [], collectibles: [],
       enemies: [], targets: [{ x: 950, y: 640, r: 60, hit: false, label: 'F 击掌' }], goal: null,
       start: { x: 300, y: 670 }, carry: false, docX: 950, walkOut: false, walkT: 0,
-      objective: '与奥托博士握手言和', sub: '听完对白，靠近博士按 F',
+      objective: '与奥托博士握手言和', sub: '听完对白，靠近博士点击提示',
       dialogue: [{ speaker: '章鱼博士', text: '太感谢你了，孩子！要不是你的蛛丝够结实，我差点在武汉闯下大祸。不打不相识，从今天起，你就是我奥托最好的朋友！', voice: 'vo_d03', lock: true, comic: 'comics/chip_pull.webp' }],
       video: null
     }),
@@ -83,7 +83,7 @@ function buildScene(id) {
       id, chapter: 'ch2', theme: 'night', bgm: 'bgm_normal', ambience: ['sfx_portal'], width: 1800,
       platforms: [{ x: 0, y: 820, w: 1800, h: 260 }], oneways: [], anchors: [], goo: [{ x: 700, y: 820, r: 60 }],
       nodes: [], collectibles: [], targets: [{ x: 1500, y: 640, r: 70, hit: false, label: '传送门' }], goal: null, start: { x: 300, y: 670 }, carry: false,
-      objective: '穿过魔法传送门', sub: '走近右侧金橙色火花圈并按 F', dialogue: [], video: 'v1'
+      objective: '穿过魔法传送门', sub: '走近右侧金橙色火花圈点击提示', dialogue: [], video: 'v1'
     }),
     G06: () => {
       const platforms = genRoofs(5200);
@@ -179,12 +179,13 @@ export function create2D(hooks) {
     return best;
   }
   function trySwing() {
-    if (player.swing || player.swingCd > 0) return;
-    const a = nearestAnchor(); if (!a) { toast('附近没有可吸附的锚点', 1400, true); return; }
+    if (player.swing || player.swingCd > 0) return false;
+    const a = nearestAnchor(); if (!a) { toast('附近没有可吸附的锚点', 1400, true); return false; }
     const cx = player.x + player.w / 2, cy = player.y + player.h / 2;
     player.swing = { a, len: clamp(dist(a.x, a.y, cx, cy), 160, 520) };
     player.grounded = false; player.vy = Math.min(player.vy, -120);
     hooks.audio.sfx('sfx_swing', 0.8);
+    return true;
   }
   function releaseSwing() { if (!player.swing) return; player.vx += player.facing * 40; player.vy -= 160; player.swing = null; player.swingCd = 0.22; }
   function shootWeb() {
@@ -268,8 +269,8 @@ export function create2D(hooks) {
     if (b.bound >= 4) {
       b.phase = 3;
       hooks.hideEnemyBar();
-      hooks.setObjective('拔除故障芯片', '靠近章鱼博士按 F', '');
-      toast('4 根机械爪已绑死！靠近博士按 F');
+      hooks.setObjective('拔除故障芯片', '靠近章鱼博士点击提示', '');
+      toast('4 根机械爪已绑死！靠近博士点击提示');
     } else {
       hooks.setObjective('绑住 4 根机械爪（' + b.bound + '/4）', '30 秒内朝发光爪点各射 1 发蛛网', '');
     }
@@ -337,7 +338,7 @@ export function create2D(hooks) {
   function hitVenom() {
     scene.boss.webs++;
     hooks.setObjective('困住毒液本体（' + scene.boss.webs + '/12）', scene.sub, scene.boss.webs + ' / 12');
-    if (scene.boss.webs >= 12) { toast('毒液已被死死困住！按 F 呼叫钢铁侠！'); scene.boss.state = 'bound'; }
+    if (scene.boss.webs >= 12) { toast('毒液已被死死困住！点击提示呼叫钢铁侠！'); scene.boss.state = 'bound'; }
   }
   function callIronMan() { hooks.playVideo('v3', () => { hooks.audio.sfx('sfx_impact'); hooks.audio.sfx('sfx_misc'); hooks.goTo('G09'); }); }
 
@@ -402,6 +403,9 @@ export function create2D(hooks) {
       if (!e.alive) continue;
       e.t += dt; e.x += e.dir * (85 + Math.sin(e.t * 1.6) * 26) * dt; // v19：移动速度减慢约 40%
       if (e.x < (e.minX ?? 60) || e.x > (e.maxX ?? scene.width - 120)) e.dir *= -1;
+      // v20：蘑菇怪贴地——跟随下方平台顶面移动，不再穿模/悬空
+      const underP = scene.platforms.find(p => e.x + e.w / 2 > p.x && e.x + e.w / 2 < p.x + p.w);
+      if (underP) e.y = underP.y - e.h;
       if (!e.harmless && player.invuln <= 0 && dist(player.x + player.w / 2, player.y + player.h / 2, e.x + e.w / 2, e.y + e.h / 2) < 78) hurt(1);
     }
     // 蛛网弹
@@ -480,21 +484,39 @@ export function create2D(hooks) {
 
   function px(x, y, w, h, color) { ctx.fillStyle = color; ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); }
   function drawPixelPlayer() {
+    // v20：玩家像素精细度提升——明暗层次、面罩网纹、高光
     const x = Math.round(player.x + player.w / 2 - 20), y = Math.round(player.y + player.h);
-    const red = '#c0392b', blue = '#2e4c8a', dark = '#141018', eye = '#f4f1e8';
+    const red = '#c0392b', redL = '#d95a48', redD = '#7d2417', blue = '#2e4c8a', blueL = '#4a6cb0', dark = '#141018', eye = '#f4f1e8';
     const run = player.grounded && Math.abs(player.vx) > 20 ? Math.sin(player.anim * 14) : 0;
-    px(x - 12, y - 42, 10, 42, blue); px(x + 2, y - 42, 10, 42, blue);
-    px(x - 16, y - 6, 16, 6, dark); px(x + 0, y - 6 + (run > 0 ? -0 : 0), 16, 6, dark);
-    px(x - 14, y - 96, 28, 56, red);
+    const lean = Math.max(-4, Math.min(4, run * 4));
+    // 腿：蓝裤 + 高光 + 靴
+    px(x - 13 + lean * 0.5, y - 42, 11, 42, blue);
+    px(x + 2 + lean * 0.5, y - 42, 11, 42, blue);
+    px(x - 11 + lean * 0.5, y - 40, 4, 12, blueL); px(x + 4 + lean * 0.5, y - 40, 4, 12, blueL);
+    px(x - 16 + lean * 0.5, y - 6, 16, 6, dark); px(x + 0 + lean * 0.5, y - 6, 16, 6, dark);
+    // 身体：红甲 + 侧影 + 腰带
+    px(x - 14, y - 96, 28, 56, redD);
+    px(x - 14, y - 96, 28, 8, redL);
+    px(x - 12, y - 88, 24, 30, red);
+    px(x + 4, y - 88, 8, 30, redL);
     px(x - 14, y - 58, 28, 16, blue);
-    px(x - 22, y - 92, 8, 34, red); px(x + 14, y - 92, 8, 34, red);
-    px(x - 10, y - 122, 20, 22, red);
+    px(x - 12, y - 56, 24, 4, blueL);
+    // 手臂：红袖 + 手
+    px(x - 24, y - 92, 9, 30, redD); px(x + 15, y - 92, 9, 30, redD);
+    px(x - 23, y - 92, 6, 12, redL); px(x + 17, y - 92, 6, 12, redL);
+    // 头罩：红 + 网纹 + 大眼
+    px(x - 10, y - 122, 20, 22, redD);
+    px(x - 10, y - 122, 20, 6, redL);
     px(x - 7, y - 116, 6, 8, eye); px(x + 1, y - 116, 6, 8, eye);
-    px(x - 14, y - 84, 28, 2, dark); px(x - 14, y - 74, 28, 2, dark);
-    if (player.swing) { px(x + 18, y - 100, 6, 6, red); }
+    px(x - 5, y - 115, 2, 4, '#ffffff'); px(x + 3, y - 115, 2, 4, '#ffffff');
+    // 面罩网纹
+    px(x - 10, y - 112, 20, 1, 'rgba(20,16,24,0.55)');
+    px(x - 6, y - 108, 12, 1, 'rgba(20,16,24,0.55)');
+    // 蛛网液喷射手部动作（摆荡时手部高亮）
+    if (player.swing) { px(x + 18, y - 100, 6, 6, redL); px(x + 21, y - 98, 2, 2, '#fff2d4'); }
   }
   function drawPixelDocOck(ox, oy, t = 0) {
-    // v19：4 根机械爪从身体背后伸出（海带式摆动），末端张开成机械爪花；新增圆形眼镜与灰白背头
+    // v20：2D 像素精细度提升——4 根机械爪（背后伸出、海带式摆动、末端机械爪花）、圆形眼镜、灰白背头、细节层次
     ctx.save();
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     for (let i = 0; i < 4; i++) {
@@ -502,7 +524,8 @@ export function create2D(hooks) {
       const phase = t * 2.2 + i * 1.15;
       let x = ox + side * 8, y = oy - 102;
       const len = 26 + Math.sin(phase * 1.2) * 5;
-      ctx.strokeStyle = '#6b1f16'; ctx.lineWidth = 11;
+      // 机械爪主臂（暗红底 + 亮色高光，关节感）
+      ctx.strokeStyle = '#4a120c'; ctx.lineWidth = 12;
       ctx.beginPath(); ctx.moveTo(x, y);
       for (let seg = 0; seg < 4; seg++) {
         const ang = side * (0.22 + seg * 0.34) - 0.75 + Math.sin(phase + seg * 0.9) * 0.32;
@@ -511,9 +534,16 @@ export function create2D(hooks) {
         ctx.lineTo(x, y);
       }
       ctx.stroke();
-      ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 6;
+      ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 7;
       ctx.stroke();
-      // 末端机械爪花：3~4 瓣张开（膨大）
+      // 关节连接件（每节之间金属方块）
+      for (let seg = 0; seg < 3; seg++) {
+        const jx = x - Math.cos(side * 0.4 + seg) * (len * 0.9 * (3 - seg));
+        const jy = y + 8 + seg * 6 + Math.sin(phase + seg) * 3;
+        px(Math.round(jx) - 3, Math.round(jy) - 3, 6, 6, '#8a2f22');
+        px(Math.round(jx) - 1, Math.round(jy) - 1, 2, 2, '#e8a06a');
+      }
+      // 末端机械爪花：4 片花瓣 + 中心发光点（膨大如盛开的花）
       const bx = x, by = y;
       ctx.strokeStyle = '#d94a35'; ctx.lineWidth = 3.5;
       for (let p = 0; p < 4; p++) {
@@ -522,22 +552,44 @@ export function create2D(hooks) {
         ctx.lineTo(bx + Math.cos(pa) * 14, by + Math.sin(pa) * 10);
         ctx.stroke();
       }
+      px(Math.round(bx) - 3, Math.round(by) - 3, 6, 6, '#ffd68a');
+      px(Math.round(bx) - 1, Math.round(by) - 1, 2, 2, '#fff2d4');
     }
-    // 身体 / 头
-    px(ox - 30, oy - 112, 60, 84, '#2c3d2c');
+    // 身体：深绿外套 + 层次
+    px(ox - 30, oy - 112, 60, 84, '#223024');
+    px(ox - 28, oy - 112, 56, 6, '#3d5a3a');
     px(ox - 24, oy - 102, 48, 42, '#3d5a3a');
+    px(ox - 24, oy - 102, 10, 42, '#4a6e47');
+    // 胸前金色机械面板 + 芯片核心
+    px(ox - 14, oy - 84, 28, 18, '#c9a050');
+    px(ox - 10, oy - 80, 8, 10, '#8a2f22');
+    px(ox + 2, oy - 79, 5, 4, '#fff2d4');
+    // 腹部深色 + 机械带
+    px(ox - 26, oy - 60, 52, 14, '#1a241a');
+    px(ox - 26, oy - 58, 52, 4, '#4a3a2c');
+    // 头：肤色 + 后脑阴影
     px(ox - 22, oy - 146, 44, 36, '#c9a27a');
-    // 灰白背头/发丝（头顶后部几束 + 顶部发片）
+    px(ox - 22, oy - 146, 44, 5, '#e0bd92');
+    px(ox - 26, oy - 128, 6, 16, '#b08a62');
+    // 灰白背头/发丝（多束 + 顶部发片）
     px(ox - 22, oy - 152, 44, 6, '#cfc8c0');
     for (let h = 0; h < 4; h++) px(ox - 20 + h * 7, oy - 158 - (h % 2) * 3, 7, 9, '#cfc8c0');
     px(ox - 26, oy - 148, 52, 4, '#cfc8c0');
-    // 圆形眼镜：双框 + 玻璃 + 镜桥
+    // 圆形眼镜：大框 + 镜片反光 + 镜桥
     px(ox - 18, oy - 140, 15, 13, '#e8e0d0'); px(ox + 3, oy - 140, 15, 13, '#e8e0d0');
     px(ox - 15, oy - 137, 9, 7, '#22222e'); px(ox + 6, oy - 137, 9, 7, '#22222e');
+    px(ox - 12, oy - 135, 2, 3, '#ffffff'); px(ox + 9, oy - 135, 2, 3, '#ffffff');
     px(ox - 6, oy - 137, 12, 4, '#e8e0d0');
-    px(ox - 6, oy - 120, 12, 6, '#8a2f22');
-    px(ox - 8, oy - 106, 16, 8, '#ff3b2f');
+    // 嘴线 + 下巴
+    px(ox - 8, oy - 126, 16, 2, '#8a5a3a');
+    // 机械背甲（手臂根部）
+    px(ox - 22, oy - 108, 44, 10, '#8a2f22');
+    px(ox - 22, oy - 108, 44, 3, '#d94a35');
     px(ox - 30, oy - 28, 60, 8, '#1a241a');
+    // 腿：深色裤 + 鞋
+    px(ox - 26, oy - 24, 20, 24, '#2a3a2a');
+    px(ox + 6, oy - 24, 20, 24, '#2a3a2a');
+    px(ox - 26, oy - 2, 20, 6, '#1a1410'); px(ox + 6, oy - 2, 20, 6, '#1a1410');
     ctx.restore();
   }
   function drawPixelMonster(e) {
@@ -556,9 +608,14 @@ export function create2D(hooks) {
     px(x + 12, y + 10, 6, 6, '#241d2c'); px(x + 34, y + 16, 6, 6, '#241d2c');
   }
   function renderPixel() {
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    // v20：画面比例自适应——画布跟随视口，逻辑坐标 1920×1080 居中等比缩放
+    const cw = canvas.clientWidth || W, ch = canvas.clientHeight || H;
+    const sc = Math.min(cw / W, ch / H) || 1;
+    const ox = (cw - W * sc) / 2, oy = (ch - H * sc) / 2;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(DPR * sc, 0, 0, DPR * sc, DPR * ox, DPR * oy);
     ctx.imageSmoothingEnabled = false;
-    ctx.clearRect(0, 0, W, H);
     if (pixelBgReady) {
       // 参考图：废墟街道像素背景（视差）
       const scale = H / pixelBg.naturalHeight;
@@ -610,7 +667,14 @@ export function create2D(hooks) {
       for (let gx = p.x; gx < p.x + p.w; gx += 18) { px(gx, p.y - 14, 6, 6, '#6f9a4a'); px(gx + 9, p.y - 10, 4, 4, '#8ab85a'); }
     }
     for (const o of scene.oneways) { px(o.x, o.y, o.w, o.h, '#6b5640'); px(o.x, o.y, o.w, 4, '#8a6a4a'); }
-    for (const a of scene.anchors) { px(a.x - 14, a.y - 4, 28, 8, '#ffd68a'); px(a.x - 4, a.y - 14, 8, 28, '#ffd68a'); px(a.x - 6, a.y - 6, 12, 12, '#fff2d4'); }
+    for (const a of scene.anchors) {
+      // v20：锚点摆荡范围圈（半透明 20%，隐约可见）
+      ctx.fillStyle = 'rgba(255,214,138,0.20)';
+      ctx.beginPath(); ctx.arc(a.x, a.y, 260, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,214,138,0.10)';
+      ctx.beginPath(); ctx.arc(a.x, a.y, 380, 0, Math.PI * 2); ctx.fill();
+      px(a.x - 14, a.y - 4, 28, 8, '#ffd68a'); px(a.x - 4, a.y - 14, 8, 28, '#ffd68a'); px(a.x - 6, a.y - 6, 12, 12, '#fff2d4');
+    }
     for (const t of targets) if (!t.hit) { px(t.x - 22, t.y - 22, 44, 44, '#332a1a'); px(t.x - 16, t.y - 16, 32, 32, '#ffd68a'); px(t.x - 6, t.y - 6, 12, 12, '#fff2d4'); }
     if (scene.id === 'G02') drawPixelDocOck(1600, 820, scene.t || 0);
     if (scene.id === 'G03') drawPixelDocOck(scene.docX || 950, 820, scene.t || 0);
@@ -626,25 +690,49 @@ export function create2D(hooks) {
       px(hx - 12, hy + 10, 24, 4, '#3a1410');
     }
     // v19：第一章教学标记（黄箭头 + 文字提示）
+    // v20：显眼化——半透明背景卡片 + 粗描边文字 + 发光箭头（与「点击交互」提示同等醒目）
     if (scene.id === 'G01' && scene.tutorial) {
       ctx.textAlign = 'center';
+      const tutCard = (cx, cy, w, h) => {
+        ctx.fillStyle = 'rgba(20,14,10,0.85)';
+        roundRectPath(ctx, cx - w / 2, cy - h / 2, w, h, 14); ctx.fill();
+        ctx.strokeStyle = 'rgba(246,238,220,0.5)'; ctx.lineWidth = 2; ctx.stroke();
+      };
+      const tutText = (txt, tx, ty, size) => {
+        ctx.font = `800 ${size}px sans-serif`;
+        ctx.strokeStyle = 'rgba(20,14,10,0.95)'; ctx.lineWidth = 5; ctx.strokeText(txt, tx, ty);
+        ctx.fillStyle = '#fff2d4'; ctx.fillText(txt, tx, ty);
+      };
+      const tutArrow = (ax, ay, dir) => {
+        ctx.save();
+        ctx.strokeStyle = '#ffd68a'; ctx.lineWidth = 9; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        ctx.shadowColor = 'rgba(255,214,138,0.9)'; ctx.shadowBlur = 14;
+        ctx.beginPath();
+        if (dir === 'right') { ctx.moveTo(ax - 30, ay); ctx.lineTo(ax + 18, ay); ctx.lineTo(ax + 6, ay - 13); ctx.moveTo(ax + 18, ay); ctx.lineTo(ax + 6, ay + 13); }
+        else { ctx.moveTo(ax, ay + 30); ctx.lineTo(ax, ay - 18); ctx.lineTo(ax - 13, ay - 6); ctx.moveTo(ax, ay - 18); ctx.lineTo(ax + 13, ay - 6); }
+        ctx.stroke();
+        ctx.restore();
+      };
       if (scene.tutStep === 0) {
-        const ax = 700, ay = 690;
-        ctx.strokeStyle = '#ffd68a'; ctx.lineWidth = 7; ctx.lineCap = 'round';
-        ctx.beginPath(); ctx.moveTo(ax - 24, ay); ctx.lineTo(ax + 16, ay); ctx.lineTo(ax + 6, ay - 11); ctx.moveTo(ax + 16, ay); ctx.lineTo(ax + 6, ay + 11); ctx.stroke();
-        ctx.fillStyle = '#fff2d4'; ctx.font = '700 22px sans-serif'; ctx.fillText('向右移动 ▶', ax, ay - 30);
+        const ax = 700, ay = 680;
+        tutArrow(ax, ay, 'right');
+        tutCard(ax, ay - 58, 250, 44);
+        tutText('向右移动 ▶', ax, ay - 47, 24);
       } else if (scene.tutStep === 1) {
-        const ax = 1280, ay = 650;
-        ctx.strokeStyle = '#ffd68a'; ctx.lineWidth = 7;
-        ctx.beginPath(); ctx.moveTo(ax, ay + 24); ctx.lineTo(ax, ay - 16); ctx.lineTo(ax - 11, ay - 6); ctx.moveTo(ax, ay - 16); ctx.lineTo(ax + 11, ay - 6); ctx.stroke();
-        ctx.fillStyle = '#fff2d4'; ctx.font = '700 22px sans-serif'; ctx.fillText('按「跳」跨过缝隙 ⤒', ax, ay + 46);
+        const ax = 1280, ay = 630;
+        tutArrow(ax, ay, 'down');
+        tutCard(ax, ay + 46, 280, 44);
+        tutText('按「跳」跨过缝隙 ⤒', ax, ay + 57, 24);
       } else if (scene.tutStep === 2) {
         const t = enemies.find(e => e.tutTarget);
         if (t && t.alive) {
-          const ax = Math.round(t.x + 27), ay = Math.round(t.y - 20);
-          px(ax - 14, ay - 8, 28, 8, '#ffd68a'); px(ax - 4, ay - 14, 8, 8, '#ffd68a');
-          ctx.fillStyle = '#1d1a1c'; ctx.font = '700 20px sans-serif'; ctx.fillText('!', ax, ay - 3);
-          ctx.fillStyle = '#fff2d4'; ctx.font = '700 20px sans-serif'; ctx.fillText('点「网」射击', ax, ay + 26);
+          const ax = Math.round(t.x + 27), ay = Math.round(t.y - 34);
+          px(ax - 16, ay - 8, 32, 8, '#ffd68a'); px(ax - 4, ay - 16, 8, 8, '#ffd68a');
+          tutCard(ax, ay + 30, 240, 44);
+          tutText('点「射」击败蘑菇怪！', ax, ay + 41, 24);
+          ctx.font = '800 34px sans-serif';
+          ctx.strokeStyle = 'rgba(20,14,10,0.95)'; ctx.lineWidth = 6; ctx.strokeText('!', ax, ay - 2);
+          ctx.fillStyle = '#ffd68a'; ctx.fillText('!', ax, ay - 2);
         }
       }
     }
@@ -667,8 +755,13 @@ export function create2D(hooks) {
 
   function render() {
     if (scene.pixel) { renderPixel(); return; }
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    ctx.clearRect(0, 0, W, H);
+    // v20：画面比例自适应（与 renderPixel 相同映射）
+    const cw = canvas.clientWidth || W, ch = canvas.clientHeight || H;
+    const sc = Math.min(cw / W, ch / H) || 1;
+    const ox = (cw - W * sc) / 2, oy = (ch - H * sc) / 2;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(DPR * sc, 0, 0, DPR * sc, DPR * ox, DPR * oy);
     // 天空
     const themes = { dawn: ['#2b4d54', '#7f9385', '#f7d6a4'], dusk: ['#4a2c4f', '#b06a54', '#e8a86a'], night: ['#14222a', '#2b4a54', '#4a5560'] };
     const t = themes[scene.theme] || themes.dawn;
@@ -721,17 +814,26 @@ export function create2D(hooks) {
       const b = scene.boss;
       if (b.phase === 1) return { title: 'G02 · 反击章鱼博士', text: '等博士扔出工具箱。它飞近时按 Shift 闪避，或按左键 / J 射蛛网把工具箱反弹回去。命中 3 次后博士僵直。' };
       if (b.phase === 2) return { title: 'G02 · 绑住 4 根机械爪', text: '30 秒内朝 4 个发光爪点各射 1 发蛛网（左键 / J）；屏幕中心十字准星用来瞄准。超时会重置，可重试。' };
-      return { title: 'G02 · 拔除芯片', text: '走到章鱼博士身边（画面右侧），按 F 拔掉后颈芯片。' };
+      return { title: 'G02 · 拔除芯片', text: '走到章鱼博士身边（画面右侧），点击提示拔掉后颈芯片。' };
     }
-    if (id === 'G03') return { title: 'G03 · 握手言和', text: '听完博士的道谢，走到他身边按 F 击掌，剧情会进入 3D 第二章。' };
+    if (id === 'G03') return { title: 'G03 · 握手言和', text: '听完博士的道谢，走到他身边点击提示击掌，剧情会进入 3D 第二章。' };
     if (id === 'G04') return { title: 'G04 · 追踪黑液', text: '沿地面的黑色粘液一路向右，经过 5 个发光节点即可抵达龟山电视塔。掉下去会回到最近检查点，不会卡关。' };
-    if (id === 'G05') return { title: 'G05 · 穿过传送门', text: '走到右侧金橙色的传送门旁边，按 F（或直接走进门里）触发过场。' };
+    if (id === 'G05') return { title: 'G05 · 穿过传送门', text: '走到右侧金橙色的传送门旁边，点击提示（或直接走进门里）触发过场。' };
     if (id === 'G06') return { title: 'G06 · 纽约追踪', text: '继续沿黑液痕迹向右穿过雨夜街巷，走到废弃工厂大门即可进入下一段。' };
     if (id === 'G07') return { title: 'G07 · 清掉毒液小兵', text: '用左键 / J 发射蛛网弹，每只小兵需要 3 发；清完 3 只钢铁侠就会破门救场。' };
-    if (id === 'G08') return { title: 'G08 · 困住毒液', text: '躲开毒液的猛扑；它硬直时连续按左键 / J 射网，累计 12 层后按 F（或 Q）呼叫钢铁侠。' };
+    if (id === 'G08') return { title: 'G08 · 困住毒液', text: '躲开毒液的猛扑；它硬直时连续按左键 / J 射网，累计 12 层后点击提示呼叫钢铁侠。' };
     if (id === 'G09') return { title: 'G09 · 背埃迪回家', text: '按住 D / → 背着他向右走，走到公寓门口就会进入第三章。' };
     return { title: '提示', text: '继续向右推进剧情。' };
   }
 
-  return { enter, update, render, onInteract, trySwing, releaseSwing, shootWeb, getHint };
+  // v20：点击画面中的交互对象（章鱼博士/握手目标/传送门）同样触发交互（手机端无 F 键）
+  function clickPick(nx, ny) {
+    const wx = nx * W + camX, wy = ny * H;
+    if (scene.id === 'G02' && scene.boss.phase === 3 && Math.abs(wx - 1600) < 230 && wy > 480) { onInteract(); return true; }
+    if (scene.id === 'G03' && targets[0] && !targets[0].hit && dist(wx, wy, targets[0].x, targets[0].y) < 190) { onInteract(); return true; }
+    if (scene.id === 'G05' && targets[0] && !targets[0].hit && dist(wx, wy, targets[0].x, targets[0].y) < 190) { onInteract(); return true; }
+    return false;
+  }
+
+  return { enter, update, render, onInteract, trySwing, releaseSwing, shootWeb, getHint, clickPick };
 }

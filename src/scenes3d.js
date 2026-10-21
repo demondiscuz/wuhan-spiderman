@@ -241,7 +241,21 @@ export function create3D(hooks) {
       buildSkyDome('#2b4d54', '#a8b9ad', '#f7d6a4');
     }
     for (const r of opts.rows || []) { box(r.w, r.h, r.d, r.color, r.x, -r.h / 2, r.z); addCollider(r.x, r.z, r.w, r.d, 0); }
-    for (const a of opts.anchors || []) { anchors.push(new THREE.Vector3(a.x, a.y, a.z)); }
+    // v20：3D 锚点——半透明摆荡范围圈（20% 隐约可见）+ 锚点金色光点
+    for (const a of opts.anchors || []) {
+      const v = new THREE.Vector3(a.x, a.y, a.z);
+      anchors.push(v);
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(3.2, 5.0, 36),
+        new THREE.MeshBasicMaterial({ color: 0xffd68a, transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthWrite: false })
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.copy(v);
+      group.add(ring);
+      const dot = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffd68a }));
+      dot.position.copy(v);
+      group.add(dot);
+    }
   }
 
   function buildWorkbench(x, z) {
@@ -447,7 +461,7 @@ export function create3D(hooks) {
       const doc = buildDocOck(0, -10); mod.docArms = doc.userData.arms;
       targets.push({ x: 0, z: -6, r: 2, hit: false, mesh: sphere(0.7, 0xffd68a, 0, 1.4, -6) });
       P.pos.set(0, 0, 8); P.yaw = 0; respawn.set(0, 0, 8);
-      hooks.setObjective('与奥托博士握手言和', '靠近博士并按 F', '');
+      hooks.setObjective('与奥托博士握手言和', '靠近博士，点击提示交互', '');
       hooks.audio.bgm('bgm_normal'); hooks.audio.ambience([]);
       hooks.sayQueue([{ speaker: '章鱼博士', text: '太感谢你了，孩子！要不是你的蛛丝够结实，我差点在武汉闯下大祸。不打不相识，从今天起，你就是我奥托最好的朋友！', voice: 'vo_d03', lock: true }]);
     }
@@ -556,7 +570,7 @@ export function create3D(hooks) {
       buildWorkbench(0, -6);
       mod.suitStage = 0;
       P.pos.set(0, 0, 8); P.yaw = 0; respawn.set(0, 0, 8);
-      hooks.setObjective('整理战衣（0/3）', '靠近工作台按 F：除尘 → 缝补 → 晾干', '');
+      hooks.setObjective('整理战衣（0/3）', '靠近工作台，点击提示：除尘 → 缝补 → 晾干', '');
       hooks.audio.bgm('bgm_normal'); hooks.audio.ambience(['sfx_wind']);
     }
     else if (id === 'G11') {
@@ -569,7 +583,7 @@ export function create3D(hooks) {
   }
 
   function nearestAnchor() { let best = null, bestD = 1e9; for (const a of anchors) { const d = P.pos.distanceTo(a); if (a.y > P.pos.y + 0.5 && d < 10 && d < bestD) { best = a; bestD = d; } } return best; }
-  function trySwing() { if (P.swing || P.swingCd > 0) return; const a = nearestAnchor(); if (!a) { toast('附近没有可吸附的锚点', 1400, true); return; } P.swing = { a, len: clamp(P.pos.distanceTo(a), 3, 10) }; P.grounded = false; P.vel.y = Math.min(P.vel.y, -2); audio.sfx('sfx_swing', 0.8); }
+  function trySwing() { if (P.swing || P.swingCd > 0) return false; const a = nearestAnchor(); if (!a) { toast('附近没有可吸附的锚点', 1400, true); return false; } P.swing = { a, len: clamp(P.pos.distanceTo(a), 3, 10) }; P.grounded = false; P.vel.y = Math.min(P.vel.y, -2); audio.sfx('sfx_swing', 0.8); return true; }
   function releaseSwing() { if (!P.swing) return; const f = forward(); P.vel.add(new THREE.Vector3(f.x * 3, 2, f.z * 3)); P.swing = null; P.swingCd = 0.22; }
   function forward() { return new THREE.Vector3(-Math.sin(P.yaw), 0, -Math.cos(P.yaw)); }
   function right() { return new THREE.Vector3(Math.cos(P.yaw), 0, -Math.sin(P.yaw)); }
@@ -591,7 +605,7 @@ export function create3D(hooks) {
     audio.sfx('sfx_misc');
     const label = ['除尘完成', '缝补完成', '晾干完成'][mod.suitStage - 1] || '整理完成';
     toast(label);
-    hooks.setObjective('整理战衣（' + mod.suitStage + '/3）', '靠近工作台按 F：除尘 → 缝补 → 晾干', '');
+    hooks.setObjective('整理战衣（' + mod.suitStage + '/3）', '靠近工作台，点击提示：除尘 → 缝补 → 晾干', '');
     if (mod.suitStage >= 3) setTimeout(() => hooks.goTo('G11'), 900);
   }
 
@@ -866,7 +880,7 @@ export function create3D(hooks) {
     if (boss.hp >= 3) { boss.phase = 2; setupClaws(); toast('章鱼博士陷入僵直！射网绑住 4 根机械爪'); }
   }
   function setupClaws() { targets = []; for (let i = 0; i < 4; i++) { const ang = i * Math.PI / 2 + 0.4; targets.push({ x: Math.cos(ang) * 3.5, z: -10 + Math.sin(ang) * 3.5, r: 1, hit: false, bind: true, mesh: sphere(0.7, 0xffd68a, Math.cos(ang) * 3.5, 1 + (i % 2), -10 + Math.sin(ang) * 3.5) }); } boss.bound = 0; boss.timer = 30; boss.lastSec = -1; hooks.setObjective('绑住 4 根机械爪（0/4）', '30 秒内朝发光爪点各射 1 发蛛网', ''); }
-  function checkBind() { if (boss.bound >= 4) { boss.phase = 3; hooks.setObjective('拔除故障芯片', '走到章鱼博士身边按 F', ''); toast('4 根机械爪已绑死！靠近并按 F 拔除故障芯片'); } else { hooks.setObjective('绑住 4 根机械爪（' + boss.bound + '/4）', '30 秒内朝发光爪点各射 1 发蛛网', ''); } }
+  function checkBind() { if (boss.bound >= 4) { boss.phase = 3; hooks.setObjective('拔除故障芯片', '走到章鱼博士身边，点击提示交互', ''); toast('4 根机械爪已绑死！靠近并点击提示拔除故障芯片'); } else { hooks.setObjective('绑住 4 根机械爪（' + boss.bound + '/4）', '30 秒内朝发光爪点各射 1 发蛛网', ''); } }
   function removeChip() { if (boss.phase !== 3) return; audio.sfx('sfx_mech'); hooks.goTo('G03'); }
   function onHandshake() { audio.sfx('sfx_mech'); hooks.sayQueue([{ speaker: '蜘蛛侠', text: '一言为定，拐子！我现在就带你克楼下骑碗热干面！', voice: 'vo_d04', lock: true }]); setTimeout(() => { audio.sfx('sfx_jet'); hooks.goTo('G04'); }, 4500); }
   function triggerWukong() {
@@ -891,18 +905,18 @@ export function create3D(hooks) {
     if (mod.id === 'G01') return { title: 'G01 · 飞向绿地中心', text: '按住 E / 右键吸附头顶发光的锚点摆荡；WASD 前进、Space 跳。一路朝远处的蓝色高塔飞，靠近塔顶会触发蜘蛛感应并进入下一段。' };
     if (mod.id === 'G02') {
       if (boss.phase === 1) return { title: 'G02 · 反击章鱼博士', text: '等博士扔出工具箱。工具箱飞近时按 Shift 闪避，或按左键 / J 射蛛网把工具箱反弹回去。命中 3 次后博士会僵直。' };
-      if (boss.phase === 2) return { title: 'G02 · 绑住 4 根机械爪', text: '30 秒内朝 4 个发光的爪点各射 1 发蛛网（左键 / J）。屏幕中心的十字准星用来瞄准；超时会重置，可以重试。绑满 4 根后靠近博士按 F。' };
-      if (boss.phase === 3) return { title: 'G02 · 拔除芯片', text: '走到章鱼博士身边（在他附近），按 F 拔掉后颈冒黑烟的故障芯片。' };
+      if (boss.phase === 2) return { title: 'G02 · 绑住 4 根机械爪', text: '30 秒内朝 4 个发光的爪点各射 1 发蛛网（左键 / J）。屏幕中心的十字准星用来瞄准；超时会重置，可以重试。绑满 4 根后靠近博士点击提示。' };
+      if (boss.phase === 3) return { title: 'G02 · 拔除芯片', text: '走到章鱼博士身边（在他附近），点击提示拔掉后颈冒黑烟的故障芯片。' };
       return { title: 'G02 · 完成', text: '芯片已拔除，即将进入握手剧情。' };
     }
-    if (mod.id === 'G03') return { title: 'G03 · 握手言和', text: '听完奥托博士的道谢，走到他身边按 F 击掌，再听完 D04 就会进入第二章。' };
+    if (mod.id === 'G03') return { title: 'G03 · 握手言和', text: '听完奥托博士的道谢，走到他身边点击提示击掌，再听完 D04 就会进入第二章。' };
     if (mod.id === 'G04') return { title: 'G04 · 追踪黑液', text: '3D 天台：WASD 前进，沿黑液痕迹经过 5 个发光节点，走到最深处即可进入龟山电视塔。' };
     if (mod.id === 'G05') return { title: 'G05 · 穿过传送门', text: '走近发光的金橙色传送门（会自动触发），过场结束后会安全传送到纽约，不会卡住或下坠。' };
     if (mod.id === 'G06') return { title: 'G06 · 纽约追踪', text: '沿雨夜街巷一直向前走，到工厂大门即进入下一段。' };
     if (mod.id === 'G07') return { title: 'G07 · 清掉毒液小兵', text: '左键 / J 发射蛛网弹，每只小兵需要 3 发；清完 3 只钢铁侠会破门救场。' };
-    if (mod.id === 'G08') return { title: 'G08 · 困住毒液', text: '毒液会随机移动并主动扑击；躲开后趁硬直连续按左键 / J 射网，累计 12 层自动收容，无需按 F。' };
+    if (mod.id === 'G08') return { title: 'G08 · 困住毒液', text: '毒液会随机移动并主动扑击；躲开后趁硬直连续按左键 / J 射网，累计 12 层自动收容，无需按键。' };
     if (mod.id === 'G09') return { title: 'G09 · 背埃迪回家', text: '沿街道向前走，到公寓门口即进入第三章。' };
-    if (mod.id === 'G10') return { title: 'G10 · 整理战衣', text: '走到天台工作台旁，按 F 依次完成：除尘 → 缝补 → 晾干。三次完成后进入终章。' };
+    if (mod.id === 'G10') return { title: 'G10 · 整理战衣', text: '走到天台工作台旁，点击提示依次完成：除尘 → 缝补 → 晾干。三次完成后进入终章。' };
     if (mod.id === 'G11') return { title: 'G11 · 抬头看天', text: '把鼠标向上移动（或按 W / ↑）抬头仰望天空，就会触发终章视频。' };
     return { title: '提示', text: '按提示继续推进剧情。' };
   }

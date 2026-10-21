@@ -63,9 +63,9 @@ const COMICS = {
 const MIN_LOAD_MS = 4000;
 const waitMin = (ms) => new Promise((r) => setTimeout(r, ms));
 const CHAPTER_TIPS = {
-  ch1: '在武汉高空荡丝飞跃，跟随教学打败失控的章鱼博士！',
-  ch2: '追踪神秘黑液穿过传送门，在纽约雨夜街头查明真相！',
-  ch3: '回到黄昏天台整理战衣，抬头仰望，迎接意想不到的客人……'
+  ch1: '第一章：跟随教学，在武汉高空荡丝飞跃，打败失控的章鱼博士！',
+  ch2: '第二章：追踪神秘黑液穿过传送门，在纽约雨夜街头查明真相！',
+  ch3: '第三章：回到黄昏天台整理战衣，抬头仰望，天上竟然是……'
 };
 const CHAPTER_IMG = {
   ch2: `${import.meta.env.BASE_URL}comics/ch2_transition.webp`,
@@ -274,9 +274,9 @@ function setMode(mode) {
   ui.el.stage.classList.toggle('mode-2d', mode === '2d');
   const hands = document.getElementById('firstPersonHands');
   if (hands) hands.classList.toggle('hidden', mode !== '3d');
-  // v19：前/后移动键仅在 3D 模式显示
+  // v20：2D 显示左右键（隐藏摇杆）；3D 显示虚拟摇杆（隐藏左右键）
   const tc = document.getElementById('touchControls');
-  if (tc) tc.classList.toggle('touch-nav-on', mode === '3d');
+  if (tc) { tc.classList.toggle('mode-2d', mode === '2d'); tc.classList.toggle('mode-3d', mode === '3d'); }
 }
 function resetWebReady() {
   S.webReady = false;
@@ -296,6 +296,8 @@ function enterScene(id) {
   hideComic();
   ui.hideHint(); ui.hideEnemyBar(); ui.hideInteract(); audio.resume();
   resetWebReady();
+  // v20：切场景时清掉触屏摆荡切换状态与摆荡按住标记，避免传送后残留
+  S.touchSwing = false; I.swingHeld = false;
   ui.el.topLocation.textContent = LOCATIONS[id] || CHAPTERS[ch].title;
   ui.el.locationLabel.textContent = id + ' · ' + (LOCATIONS[id] || '');
   if (mode === '2d') scenes2d.enter(id); else scenes3d.enter(id);
@@ -465,35 +467,92 @@ function bindInput() {
       e.preventDefault();
       if (act === 'left') I.left = true;
       if (act === 'right') I.right = true;
-      if (act === 'forward') I.forward = true;
-      if (act === 'back') I.back = true;
       if (act === 'jump') I.jumpBuffer = 0.12;
       if (act === 'shoot') {
-        // v19：丝键预备状态下一次点击“网”→ 优先摆荡（消耗预备）；否则照常发射
-        if (S.webReady) {
-          S.webReady = false;
-          btn.classList.remove('active');
-          document.querySelectorAll('[data-touch="swing"]').forEach((b) => b.classList.remove('active'));
-          if (S.moduleId) active().trySwing();
-        } else {
-          I.shoot = true;
-        }
-      }
-      if (act === 'interact') {
-        if (S.dialogueActive) skipDialogue();
-        else if (S.moduleId) active().onInteract();
+        // v20：直接发射网液（原“丝键预备”制已移除；摆荡中同样可射）
+        I.shoot = true;
       }
       if (act === 'swing') {
-        // v19：丝键切换制——点一下预备（高亮），再点取消；预备状态不影响移动/跳跃
-        S.webReady = !S.webReady;
-        btn.classList.toggle('active', S.webReady);
-        ui.toast(S.webReady ? '丝线预备，点「网」发射' : '取消丝线预备', 800);
+        // v20：丝键切换——点一次进入悬挂摆荡（需在锚点范围内），摆荡中可同时射网，再点一次掉落
+        if (S.touchSwing) {
+          S.touchSwing = false; I.swingHeld = false;
+          if (S.moduleId) active().releaseSwing();
+        } else if (S.moduleId) {
+          if (active().trySwing()) { S.touchSwing = true; I.swingHeld = true; }
+        }
       }
-      if (act === 'dodge') I.dodge = true;
     };
-    const up = (e) => { e.preventDefault(); if (act === 'left') I.left = false; if (act === 'right') I.right = false; if (act === 'forward') I.forward = false; if (act === 'back') I.back = false; if (act === 'swing') { /* 切换制：松手不做任何事 */ } };
+    const up = (e) => {
+      e.preventDefault();
+      if (act === 'left') I.left = false;
+      if (act === 'right') I.right = false;
+      if (act === 'shoot') I.shoot = false;
+    };
     btn.addEventListener('pointerdown', down); btn.addEventListener('pointerup', up); btn.addEventListener('pointerleave', up);
   });
+  // v20：王者荣耀式虚拟摇杆（仅 3D 模式显示）：按住摇杆拖拽 → 前后左右移动
+  const joy = document.getElementById('joystick');
+  if (joy) {
+    const knob = joy.querySelector('.joystick-knob');
+    const R = 37;
+    let joyActive = false, joyCX = 0, joyCY = 0;
+    const applyKnob = (e) => {
+      if (!joyActive) return;
+      let dx = e.clientX - joyCX, dy = e.clientY - joyCY;
+      const d = Math.hypot(dx, dy);
+      if (d > R) { dx = (dx / d) * R; dy = (dy / d) * R; }
+      knob.style.transform = `translate(${dx}px, ${dy}px)`;
+      const nx = dx / R, ny = dy / R, dead = 0.16;
+      I.forward = ny < -dead; I.back = ny > dead; I.left = nx < -dead; I.right = nx > dead;
+    };
+    joy.addEventListener('pointerdown', (e) => {
+      joyActive = true;
+      const r = joy.getBoundingClientRect();
+      joyCX = r.left + r.width / 2; joyCY = r.top + r.height / 2;
+      joy.classList.add('active');
+      applyKnob(e);
+    });
+    window.addEventListener('pointermove', applyKnob);
+    const joyUp = () => {
+      if (!joyActive) return;
+      joyActive = false; joy.classList.remove('active');
+      knob.style.transform = 'translate(0,0)';
+      I.forward = false; I.back = false; I.left = false; I.right = false;
+    };
+    window.addEventListener('pointerup', joyUp);
+    window.addEventListener('pointercancel', joyUp);
+  }
+  // v20：交互提示卡片直接点击触发交互（替代手机端 F 键；点人物/目标同样触发）
+  const ip = ui.el.interactPrompt;
+  if (ip) ip.addEventListener('click', () => {
+    if (S.dialogueActive) skipDialogue();
+    else if (S.moduleId) active().onInteract();
+  });
+  // v20：2D 画面中直接点击交互对象（章鱼博士 / 握手目标 / 传送门）触发交互
+  const flatCanvas = $('flat');
+  if (flatCanvas) flatCanvas.addEventListener('click', (e) => {
+    if (S.mode !== '2d' || !S.moduleId || S.dialogueActive || S.comicActive) return;
+    const r = flatCanvas.getBoundingClientRect();
+    const nx = (e.clientX - r.left) / Math.max(1, r.width);
+    const ny = (e.clientY - r.top) / Math.max(1, r.height);
+    scenes2d.clickPick(nx, ny);
+  });
+  // v20：游戏画面比例自适应终端（不固定 16:9）——画布跟随视口，2D 居中缩放、3D 全屏适配
+  function fitStage() {
+    const stage = ui.el.stage;
+    const w = Math.max(1, stage.clientWidth || window.innerWidth);
+    const h = Math.max(1, stage.clientHeight || window.innerHeight);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const gl = $('gl'), flat = $('flat');
+    if (gl) { gl.width = Math.round(w * dpr); gl.height = Math.round(h * dpr); }
+    if (flat) { flat.width = Math.round(w * dpr); flat.height = Math.round(h * dpr); }
+    renderer.setPixelRatio(dpr);
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', fitStage);
+  fitStage();
   // v19：3D 触屏拖拽转视角（空白区域拖动；按钮区域已被 touch-btn 捕获，不冲突）
   let dragStart = null;
   const glCanvas = $('gl');

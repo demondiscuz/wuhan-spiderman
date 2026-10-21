@@ -81,7 +81,7 @@ export function createUI() {
   function hideEnemyBar() { el.enemyBar.classList.add('hidden'); }
   function showInteract(text) {
     if (!el.interactPrompt) return;
-    el.interactText.textContent = text || '按 F 交互';
+    el.interactText.textContent = text || '点击交互';
     el.interactPrompt.classList.remove('hidden');
   }
   function hideInteract() { if (el.interactPrompt) el.interactPrompt.classList.add('hidden'); }
