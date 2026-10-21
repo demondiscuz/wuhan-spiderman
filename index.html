@@ -2,9 +2,16 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
   <meta name="theme-color" content="#1b1712">
   <title>蜘蛛侠：江城奇旅</title>
+  <!-- PWA：添加到主屏幕后全屏运行（无 Safari 地址栏） -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="江城奇旅">
+  <link rel="apple-touch-icon" href="/icon-192.png">
   <script type="module" src="/src/main.js"></script>
   <link rel="stylesheet" href="/src/style.css">
 </head>
@@ -57,11 +64,14 @@
         <div class="chip"><span class="chip-icon">📄</span><span class="chip-label">情报</span><b id="intel">0</b></div>
       </section>
 
-      <section id="objectiveCard" class="paper-card">
-        <div class="objective-head"><span class="objective-label">今日目标</span><span id="objectiveCheck" class="objective-check">○</span></div>
-        <div class="objective-title" id="objectiveTitle">追踪黑色粘液</div>
-        <div class="objective-sub" id="objectiveSub"></div>
-        <div class="objective-progress"><span id="objectiveProgress"></span></div>
+      <section id="objectiveCard" class="paper-card" role="button" tabindex="0" title="点击收起 / 展开目标" aria-label="目标卡片，点击收起或展开">
+        <div class="objective-mini" aria-hidden="true">🎯</div>
+        <div class="objective-body">
+          <div class="objective-head"><span id="objectiveCheck" class="objective-check">○</span></div>
+          <div class="objective-title" id="objectiveTitle">追踪黑色粘液</div>
+          <div class="objective-sub" id="objectiveSub"></div>
+          <div class="objective-progress"><span id="objectiveProgress"></span></div>
+        </div>
       </section>
 
       <div id="enemyBar" class="enemy-bar hidden" aria-live="polite">
@@ -108,6 +118,7 @@
         <div class="start-bottom">
           <h1 class="start-title">蜘蛛侠：江城奇旅</h1>
           <button id="startBtn" class="start-btn">开始游戏</button>
+          <p class="start-pwa-hint">📱 iPhone 全屏游玩：点浏览器「分享」→「添加到主屏幕」，从主屏幕图标进入即无地址栏</p>
         </div>
       </div>
     </div>

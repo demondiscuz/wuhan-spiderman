@@ -461,6 +461,11 @@ function bindInput() {
     if (e.button === 0) I.shoot = false;
   });
   window.addEventListener('contextmenu', (e) => e.preventDefault());
+  // iOS Safari：阻止捏合缩放 / 双击缩放（配合 touch-action）
+  document.addEventListener('gesturestart', (e) => e.preventDefault());
+  document.addEventListener('gesturechange', (e) => e.preventDefault());
+  document.addEventListener('gestureend', (e) => e.preventDefault());
+  document.addEventListener('dblclick', (e) => e.preventDefault());
   document.querySelectorAll('[data-touch]').forEach((btn) => {
     const act = btn.dataset.touch;
     const down = (e) => {
@@ -585,6 +590,14 @@ function bindInput() {
   });
   ui.el.btnFullscreen.addEventListener('click', () => { if (document.fullscreenElement) document.exitFullscreen(); else ui.el.stage.requestFullscreen && ui.el.stage.requestFullscreen(); });
   ui.el.btnJournal.addEventListener('click', () => ui.toast(S.objective + ' —— ' + S.objectiveSub));
+  // v21：目标卡片点击收缩为小缩略按钮，再点展开（阻止冒泡到 window 造成误射）
+  const objCard = document.getElementById('objectiveCard');
+  if (objCard) {
+    const toggleObj = (e) => { e.stopPropagation(); objCard.classList.toggle('collapsed'); };
+    objCard.addEventListener('mousedown', (e) => e.stopPropagation());
+    objCard.addEventListener('click', toggleObj);
+    objCard.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); objCard.classList.toggle('collapsed'); } });
+  }
   document.addEventListener('visibilitychange', () => { if (document.hidden && S.state === 'playing') setPaused(true); });
 }
 
