@@ -628,6 +628,8 @@ body {
 #touchControls.mode-2d .touch-right,
 #touchControls.mode-2d .touch-left { display: flex; }
 #touchControls.mode-3d .touch-left { display: none; }
+/* v23：3D 模式摇杆在左下，跳/丝/射三键固定右下（touch-left 隐藏后 space-between 会把单元素留在左侧，需 margin-left:auto 推到右边） */
+#touchControls.mode-3d .touch-right { margin-left: auto; }
 .touch-btn {
   pointer-events: auto;
   width: 62px;
